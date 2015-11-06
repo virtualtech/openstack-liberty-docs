@@ -44,7 +44,7 @@ Canonical社が提供するCloud Archiveリポジトリーを使って、OpenSta
 
 OSは以下のURLよりイメージをダウンロードしたUbuntu Server 14.04.1 LTS(以下Ubuntu Server)のイメージを使ってインストールします。インストール後`apt-get dist-upgrade`を行って最新のアップデートを適用した状態にしてください。
 
-本書は3.13.0-66以降のバージョンが動作するUbuntu 14.04.3を想定しています。
+本書は3.13.0-67以降のバージョンのカーネルで動作するUbuntu 14.04.3を想定しています。
 
 - <http://old-releases.ubuntu.com/releases/14.04.1/ubuntu-14.04.1-server-amd64.iso>
 
@@ -57,14 +57,24 @@ OSは以下のURLよりイメージをダウンロードしたUbuntu Server 14.0
 
 ### 1-3 作成するサーバー（ノード）
 
-今回構築するOpenStack環境は、以下4台のサーバーで構成します。
+今回構築するOpenStack環境は、以下3台のサーバーに次のような構成でセットアップします。
 
-+ SQLノード  
-  データベースサーバーの実行用のノードです。データベースはこのノード上で作成します。
-+ コントローラーノード  
-  OpenStack環境全体を管理するコントローラーとして機能します。
-+ コンピュートノード  
-  仮想マシンインスタンスの実行、外部ネットワークとインスタンスの間のネットワークを制御します。
+SQL           | コントローラー | コンピュート 
+------------- | -------------- | --------------
+MariaDB       | RabbitMQ       | Linux KVM
+              | NTP            | Nova Compute
+              | Keystone       | Linux Bridge Agent
+              | Glance
+              | Nova
+              | Neutron Server
+              | Linux Bridge Agent
+              | L3 Agent
+              | DHCP Agent
+              | Metadata Agent
+              | Cinder
+               
+
+<!-- BREAK -->
 
 ### 1-4 ネットワークセグメントの設定
 
@@ -1994,10 +2004,9 @@ controller# openstack endpoint create --region RegionOne \
 ```
 
 <!-- BREAK -->
-<!--11/5ここまで編集完了-->
 
 
-### 9-3 パッケージインストール
+### 9-3 パッケージのインストール
 
 本例ではネットワークの構成は公式マニュアルの「[Networking Option 2: Self-service networks](http://docs.openstack.org/liberty/install-guide-ubuntu/neutron-controller-install-option2.html)」の方法で構築する例を示します。
 
@@ -2008,7 +2017,7 @@ controller# apt-get install neutron-server neutron-plugin-ml2 \
  neutron-metadata-agent python-neutronclient
 ```
 
-### 9-4 設定の変更
+### 9-4 Neutronコンポーネントの設定を変更
 
 + Neutron Serverの設定
 
@@ -2016,8 +2025,6 @@ controller# apt-get install neutron-server neutron-plugin-ml2 \
 controller# vi /etc/neutron/neutron.conf 
 
 [DEFAULT]...
-verbose = True
-
 core_plugin = ml2             ←確認service_plugins = router      ←追記allow_overlapping_ips = True  ←変更
 rpc_backend = rabbit          ←アンコメント
 auth_strategy = keystone      ←アンコメント
@@ -2034,7 +2041,7 @@ auth_url = http://controller:35357
 auth_plugin = password
 project_domain_id = default
 user_domain_id = default
-project_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(8-2で設定したもの)
+project_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(9-2で設定したもの)
 
 [nova]（以下末尾に追記）
 ...
@@ -2060,7 +2067,6 @@ rabbit_password = password
 controller# less /etc/neutron/neutron.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-
 + ML2プラグインの設定
 
 ```
@@ -2068,19 +2074,22 @@ controller# vi /etc/neutron/plugins/ml2/ml2_conf.ini
 
 [ml2]
 ...
-type_drivers = flat,vlan,gre,vxlan       ← 追記
-tenant_network_types = gre               ← 追記
-mechanism_drivers = openvswitch          ← 追記
+type_drivers = flat,vlan,vxlan           ← 追記
+tenant_network_types = vxlan             ← 追記
+mechanism_drivers = linuxbridge,l2population   ← 追記
+extension_drivers = port_security              ← 追記
 
-[ml2_type_gre]
+[ml2_type_flat]
 ...
-tunnel_id_ranges = 1:1000                ← 追記
+flat_networks = public                   ← 追記
+
+[ml2_type_vxlan]
+...
+vni_ranges = 1:1000                      ← 追記
 
 [securitygroup]
-...
-enable_security_group = True             ← アンコメント                                                      
+...                                                     
 enable_ipset = True                      ← アンコメント
-firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver   ← 追記
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
@@ -2091,28 +2100,156 @@ controller# less /etc/neutron/plugins/ml2/ml2_conf.ini | grep -v "^\s*$" | grep 
 
 <!-- BREAK -->
 
-### 9-5 設定の変更
++ Linux bridge agentの設定
+
+PUBLIC_INTERFACE_NAMEをパブリックネットワークに接続している側のNICを指定します。
+
+```
+controller# vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
+
+[linux_bridge]
+physical_interface_mappings = public:PUBLIC_INTERFACE_NAME  ← 追記
+```
+
+OVERLAY_INTERFACE_IP_ADDRESSは、先にPUBLIC_INTERFACE_NAMEを置き換えたNIC側のIPアドレスを設定します。
+
+```
+[vxlan]
+enable_vxlan = True                        ← アンコメント
+local_ip = OVERLAY_INTERFACE_IP_ADDRESS    ← 追記
+l2_population = True                       ← 追記
+```
+
+Agentとセキュリティグループの設定を行います。
+
+```
+[agent]
+...
+prevent_arp_spoofing = True         ← 追記
+...
+[securitygroup]
+...
+enable_security_group = True        ← アンコメント
+firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver 
+↑ 追記
+```
+
+次のコマンドを実行して正しく設定を行ったか確認します。
+
+```
+controller# less /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v "^\s*$" | grep -v "^\s*#"
+```
+
++ Layer-3 agentの設定
+
+external_network_bridgeは単一のエージェントで複数の外部ネットワークを有効にするには、値を指定する必要はないため、値を空白にします。
+
+```
+# vi /etc/neutron/l3_agent.ini
+
+[DEFAULT]  (最終行に以下を追記)
+...
+interface_driver = neutron.agent.linux.interface.BridgeInterfaceDriver
+external_network_bridge =
+```
+
++ DHCP agentの設定
+
+```
+# vi /etc/neutron/dhcp_agent.ini 
+
+[DEFAULT]  (最終行に以下を追記)
+...
+interface_driver = neutron.agent.linux.interface.BridgeInterfaceDriver
+dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq
+enable_isolated_metadata = True
+```
+
++ dnsmasqの設定
+
+一般的にデフォルトのイーサネットのMTUは1500に設定されています。通常のEthernet フレームにVXLANヘッダが加算されるため、VXLANを使う場合は少なくとも50バイト多い、1550バイト以上のMTUが設定されていないと通信が不安定になったり、通信が不可能になる場合があります。これらはジャンボフレームを設定することで約9000バイトまでのMTUをサポートできるようになり対応可能ですが、ジャンボフレーム非対応のネットワーク機器を使う場合や、ネットワーク機器の設定を変更できない場合はVXLANの50バイトのオーバーヘッドを考慮して1450バイト以内のMTUに設定する必要があります。これらの制約事項はOpenStack環境でも同様で、インスタンスを起動する際にMTU 1450を設定することで、この問題を回避可能です。この設定はインスタンス起動毎にUserDataを使って設定することも可能ですが、次のように設定しておくと仮想DHCPサーバーでMTUの自動設定を行うことができるので便利です。
+
++ DHCP agentにdnsmasqの設定を追記
+
+```
+# vi /etc/neutron/dhcp_agent.ini 
+
+[DEFAULT]
+...
+dnsmasq_config_file = /etc/neutron/dnsmasq-neutron.conf  ← 追記
+```
+
++ DHCPオプションの26番(MTU)を定義
+
+```
+# vi /etc/neutron/dnsmasq-neutron.conf
+
+dhcp-option-force=26,1450
+```
+
++ Metadata agentの設定
+
+インスタンスのメタデータサービスを提供するMetadata agentを設定します。
+
+```
+# vi /etc/neutron/metadata_agent.ini
+
+[DEFAULT]
+#auth_url = http://localhost:5000/v2.0      ← コメントアウト
+auth_region = RegionOne
+#admin_tenant_name = %SERVICE_TENANT_NAME%  ← コメントアウト？
+#admin_user = %SERVICE_USER%                ← コメントアウト？
+#admin_password = %SERVICE_PASSWORD%        ← コメントアウト？
+...
+auth_uri = http://controller:5000           ← これ以下追記
+auth_url = http://controller:35357
+auth_plugin = password
+project_domain_id = default
+user_domain_id = default
+project_name = service
+username = neutron
+password = password     ← neutronユーザーのパスワード(9-2で設定したもの)
+nova_metadata_ip = controller  ← Metadataホストを指定
+metadata_proxy_shared_secret = METADATA_SECRET
+```
+
+Metadata agentの`metadata_proxy_shared_secret`に指定する値と、次の手順でNovaに設定する`metadata_proxy_shared_secret`が同じになるように設定します。任意の値を設定すれば良いですが、思いつかない場合は次のように実行して生成した乱数を使うことも可能です。
+
+```
+controller# openssl rand -hex 10
+```
+
+次のコマンドを実行して正しく設定を行ったか確認します。
+
+```
+controller# less /etc/neutron/metadata_agent.ini | grep -v "^\s*$" | grep -v "^\s*#"
+```
+
+<!-- BREAK -->
+
+### 9-5 Novaの設定を変更
 
 Novaの設定ファイルにNeutronの設定を追記します。
 
 ```
 controller# vi /etc/nova/nova.conf
 
-[DEFAULT]
-...
-network_api_class = nova.network.neutronv2.api.API
-security_group_api = neutron
-linuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriver
-firewall_driver = nova.virt.firewall.NoopFirewallDriver
-
 [neutron]
 url = http://controller:9696
-auth_strategy = keystone
-admin_auth_url = http://controller:35357/v2.0
-admin_tenant_name = service
-admin_username = neutron
-admin_password = password       ← neutronユーザーのパスワード(8-2で設定したもの)
+auth_url = http://controller:35357
+auth_plugin = password
+project_domain_id = default
+user_domain_id = default
+region_name = RegionOne
+project_name = service
+username = neutron
+password = password       ← neutronユーザーのパスワード(9-2で設定したもの)
+
+service_metadata_proxy = True
+metadata_proxy_shared_secret = METADATA_SECRET
 ```
+
+METADATA_SECRETはMetadata agentで指定した値に置き換えます。
 
 次のコマンドを実行して正しく設定を行ったか確認します。
 
@@ -2126,434 +2263,66 @@ controller# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 ```
 controller# su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf \
-  --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
-INFO  [alembic.migration] Context impl MySQLImpl.
-INFO  [alembic.migration] Will assume non-transactional DDL.
+> --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+
+No handlers could be found for logger "neutron.quota"
+INFO  [alembic.runtime.migration] Context impl MySQLImpl.
+INFO  [alembic.runtime.migration] Will assume non-transactional DDL.  
 ...
-INFO  [alembic.migration] Running upgrade 28a09af858a8 -> 20c469a5f920, add index for port
-INFO  [alembic.migration] Running upgrade 20c469a5f920 -> kilo, kilo
+INFO  [alembic.runtime.migration] Running upgrade kilo -> c40fbb377ad, Initial Liberty no-op script.
+INFO  [alembic.runtime.migration] Running upgrade c40fbb377ad -> 4b47ea298795, add reject rule
+  OK
 ```
 
 <!-- BREAK -->
 
-### 9-7 ログの確認
-
-インストールしたNeutron Serverのログを参照し、エラーが出ていないことを確認します。
-
-```
-controller# tailf /var/log/neutron/neutron-server.log
-...
-2015-07-03 11:32:50.570 8809 INFO neutron.service [-] Neutron service started, listening on 0.0.0.0:9696
-2015-07-03 11:32:50.571 8809 INFO oslo_messaging._drivers.impl_rabbit [-] Connecting to AMQP server on controller:5672
-2015-07-03 11:32:50.585 8809 INFO neutron.wsgi [-] (8809) wsgi starting up on http://0.0.0.0:9696/
-2015-07-03 11:32:50.592 8809 INFO oslo_messaging._drivers.impl_rabbit [-] Connected to AMQP server on controller:5672
-```
-
-
-### 9-8 使用しないデータベースファイル削除
-
-```
-controller# rm /var/lib/neutron/neutron.sqlite
-```
-
-### 9-9 controllerノードのNeutronと関連サービスの再起動
+### 9-7 controllerノードのNeutronと関連サービスの再起動
 
 設定を反映させるため、controllerノードの関連サービスを再起動します。
 
-```
-controller# service nova-api restart && service neutron-server restart
-```
-
-<!-- BREAK -->
-
-### 9-10 動作の確認
-
-Neutron Serverの動作を確認するため、拡張機能一覧を表示するneutronコマンドを実行します。
-
-```
-controller:~# source admin-openrc.sh
-controller:~# neutron ext-list
-+-----------------------+-----------------------------------------------+
-| alias                 | name                                          |
-+-----------------------+-----------------------------------------------+
-| security-group        | security-group                                |
-| l3_agent_scheduler    | L3 Agent Scheduler                            |
-| net-mtu               | Network MTU                                   |
-| ext-gw-mode           | Neutron L3 Configurable external gateway mode |
-| binding               | Port Binding                                  |
-| provider              | Provider Network                              |
-| agent                 | agent                                         |
-| quotas                | Quota management support                      |
-| subnet_allocation     | Subnet Allocation                             |
-| dhcp_agent_scheduler  | DHCP Agent Scheduler                          |
-| l3-ha                 | HA Router extension                           |
-| multi-provider        | Multi Provider Network                        |
-| external-net          | Neutron external network                      |
-| router                | Neutron L3 Router                             |
-| allowed-address-pairs | Allowed Address Pairs                         |
-| extraroute            | Neutron Extra Route                           |
-| extra_dhcp_opt        | Neutron Extra DHCP opts                       |
-| dvr                   | Distributed Virtual Router                    |
-+-----------------------+-----------------------------------------------+
-```
-
-<!-- BREAK -->
-
-
-## 10. Neutronのインストール・設定（networkノード）
-
-### 10-1 パッケージインストール
-
-```
-network# apt-get update
-network# apt-get install -y neutron-plugin-ml2 neutron-plugin-openvswitch-agent \neutron-l3-agent neutron-dhcp-agent neutron-metadata-agent
-```
-
-### 10-2 設定の変更
-
-+ Neutronの設定
-
-```
-network# vi /etc/neutron/neutron.conf
-
-[DEFAULT]
-...
-verbose = True                    ← 変更
-rpc_backend = rabbit              ← コメントアウトをはずす
-auth_strategy = keystone          ← コメントアウトをはずす
-
-core_plugin = ml2                 ← 確認
-service_plugins = router          ← 追記
-allow_overlapping_ips = True      ← 追記
-
-[keystone_authtoken]（既存の設定はコメントアウトし、以下を追記）
-...auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(8-2で設定したもの)
-
-[database]
-# This line MUST be changed to actually run the plugin.
-# Example:
-#connection = sqlite:////var/lib/neutron/neutron.sqlite  ←コメントアウト
-
-[oslo_messaging_rabbit]...
-# fake_rabbit = falserabbit_host = controllerrabbit_userid = openstackrabbit_password = password
-```
-
-本書の構成では、ネットワークノードのNeutron.confにはデータベースの指定は不要です。
-
-次のコマンドを実行して正しく設定を行ったか確認します。
-
-```
-network# less /etc/neutron/neutron.conf | grep -v "^\s*$" | grep -v "^\s*#"
-```
-
-<!-- BREAK -->
-
-+ ML2 Plug-inの設定
-
-```
-network# vi /etc/neutron/plugins/ml2/ml2_conf.ini
-
-[ml2]
-...
-type_drivers = flat,vlan,gre,vxlan       ← 追記
-tenant_network_types = gre               ← 追記
-mechanism_drivers = openvswitch          ← 追記
-
-[ml2_type_flat]
-...
-flat_networks = external                 ← 追記
-
-[ml2_type_gre]
-...
-tunnel_id_ranges = 1:1000                ← 追記
-
-[securitygroup]
-...
-enable_security_group = True
-enable_ipset = True
-firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver
-
-[agent]
-tunnel_types = gre                       ← 追記
-
-[ovs]
-local_ip = 192.168.0.102                 ← 追記(networkノードのInternal側)
-enable_tunneling = True                  ← 追記
-bridge_mappings = external:br-ex         ← 追記
-```
-
-次のコマンドを実行して正しく設定を行ったか確認します。
-
-```
-network# less /etc/neutron/plugins/ml2/ml2_conf.ini | grep -v "^\s*$" | grep -v "^\s*#"
-```
-
-<!-- BREAK -->
-
-+ Layer-3 (L3) agentの設定
-
-```
-network# vi /etc/neutron/l3_agent.ini
-
-[DEFAULT]
-interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver    ← アンコメント
-router_delete_namespaces = True     ← 変更
-external_network_bridge = br-ex     ← アンコメント
-verbose = True                      ← 追記
-```
-
-次のコマンドを実行して正しく設定を行ったか確認します。
-
-```
-network# less /etc/neutron/l3_agent.ini | grep -v "^\s*$" | grep -v "^\s*#"
-```
-
-+ DHCP agentの設定
-
-```
-network# vi /etc/neutron/dhcp_agent.ini
-
-[DEFAULT]
-...
-interface_driver = neutron.agent.linux.interface.OVSInterfaceDriver    ← アンコメント
-dhcp_driver = neutron.agent.linux.dhcp.Dnsmasq                         ← アンコメント
-dhcp_delete_namespaces = True                                          ← 変更
-dnsmasq_config_file = /etc/neutron/dnsmasq-neutron.conf    ← 追記
-verbose = True    ← 追記
-```
-
-次のコマンドを実行して正しく設定を行ったか確認します。
-
-```
-network# less /etc/neutron/dhcp_agent.ini | grep -v "^\s*$" | grep -v "^\s*#"
-```
-
-+ DHCPオプションでMTUの設定
-
-dnsmasq-neutron.confファイルを新規作成して、DHCPオプションを設定します。
-
-```
-network# vi /etc/neutron/dnsmasq-neutron.conf
-dhcp-option-force=26,1454
-```
-
-<!-- BREAK -->
-
-+ Metadata agentの設定
-
-```
-network# vi /etc/neutron/metadata_agent.ini
-
-[DEFAULT]
-...
-auth_url = http://localhost:5000/v2.0       ← コメントアウト
-admin_tenant_name = %SERVICE_TENANT_NAME%   ← コメントアウト
-admin_user = %SERVICE_USER%                 ← コメントアウト
-admin_password = %SERVICE_PASSWORD%         ← コメントアウト
-auth_region = RegionOne                     ← 確認
-（以下追記）
-verbose = True
-auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(8-2で設定したもの)
-nova_metadata_ip = controller
-metadata_proxy_shared_secret = password
-```
-
-metadata_proxy_shared_secretはコマンドを実行して生成したハッシュ値を設定することを推奨します。
-
-[実行例]
-
-```
-# openssl rand -hex 10
-```
-
-次のコマンドを実行して正しく設定を行ったか確認します。
-
-```
-network# less /etc/neutron/metadata_agent.ini | grep -v "^\s*$" | grep -v "^\s*#"
-```
-
-<!-- BREAK -->
-
-### 10-3 設定の変更
-
-controllerノードのNovaの設定ファイルに追記します。
-
-```
-controller# vi /etc/nova/nova.conf
-
-[neutron]
-...
-service_metadata_proxy = True
-metadata_proxy_shared_secret = password  ← ハッシュ値(9-2「Metadata agent」に設定したものと同じもの)
-```
-
-次のコマンドを実行して正しく設定を行ったか確認します。
-
-```
-controller# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
-```
-
-controllerノードのnova-apiサービスを再起動します。
+まずNova APIサービスを再起動します。
 
 ```
 controller# service nova-api restart
 ```
 
-<!-- BREAK -->
-
-### 10-4 networkノードのOpen vSwitchサービスの再起動
-
-OpenStackのネットワークサービス設定を反映させるため、networkノードでOpen vSwitchのサービスを再起動します。
+次にNeutron関連サービスを再起動します。
 
 ```
-network# service openvswitch-switch restart
+controller# service neutron-server restart && service neutron-plugin-linuxbridge-agent restart && service neutron-dhcp-agent restart && service neutron-metadata-agent restart && service neutron-l3-agent restart
 ```
 
-### 10-5 ブリッジデバイス設定
+### 9-8 動作の確認
 
-内部通信用と外部通信用のブリッジを作成して外部通信用ブリッジに共有ネットワークデバイスを接続します。
-
-```
-network# ovs-vsctl add-br br-ex ; ovs-vsctl add-port br-ex eth0
-```
-
-__注意:__
-このコマンドを実行するとnetworkノードへのSSH接続が切断されます。SSH接続ではなく、
-HP iLo、Dell iDracなどのリモートコンソールやサーバーコンソール上でコマンドを実行することを推奨します。
-
-
-### 10-6 サービスの再起動
-
-設定を反映するために、関連サービスを再起動します。
+ログを確認して、エラーが出力されていないことを確認します。
 
 ```
-network# service neutron-plugin-openvswitch-agent restartnetwork# service neutron-l3-agent restartnetwork# service neutron-dhcp-agent restartnetwork# service neutron-metadata-agent restart
+controller# tailf /var/log/nova/nova-api.log
+controller# tailf neutron-server.log
+controller# tailf neutron-metadata-agent.log
+controller# tailf neutron-plugin-linuxbridge-agent.log
+```
+
+### 9-9 使用しないデータベースファイル削除
+
+```
+controller# rm /var/lib/neutron/neutron.sqlite
 ```
 
 <!-- BREAK -->
 
-### 10-7 ブリッジデバイス設定確認
+## 10. Neutronのインストール・設定（コンピュートノード）
 
-ブリッジの作成・設定を確認します。
+次にコンピュートノードの設定を行います。
 
-#### 10-7-1 ブリッジの確認
-
-```
-network# ovs-vsctl list-br
-br-ex
-br-int
-br-tun
-```
-
-※add-brしたブリッジが表示されていれば問題ありません。
-
-
-#### 10-7-2 外部接続用ブリッジと共有ネットワークデバイスの接続確認
-
-```
-network# ovs-vsctl list-ports br-ex
-eth0
-phy-br-ex
-```
-
-※add-port で設定したネットワークデバイスが表示されていれば問題ありません。
-
-<!-- BREAK -->
-
-### 10-8 ネットワークインタフェースの設定変更
-
-Management側に接続されたNICを使って、仮想NIC(br-ex)を作成します。
-
-```
-network# vi /etc/network/interfaces
-
-# This file describes the network interfaces available on your system
-# and how to activate them. For more information, see interfaces(5).
-
-# The loopback network interface
-auto lo
-iface lo inet loopback
-
-auto eth0
-iface eth0 inet manual                        ← 既存設定を変更
-        up ip link set dev $IFACE up          ← 既存設定を変更
-        down ip link set dev $IFACE down      ← 既存設定を変更
-        
-auto br-ex                                        ← 追記
-iface br-ex inet static                           ← 追記
-        address 10.0.0.102                        ← 追記
-        netmask 255.255.255.0                     ← 追記
-        gateway 10.0.0.1                          ← 追記
-        dns-nameservers 10.0.0.1                  ← 追記
-
-auto eth1
-iface eth1 inet static
-        address 192.168.0.102
-        netmask 255.255.255.0
-```
-
-### 10-9 networkノード再起動
-
-インタフェース設定を適用するために、システムを再起動します。
-
-```
-network# reboot
-```
-
-<!-- BREAK -->
-
-### 10-10 ブリッジ設定確認
-
-各種ブリッジが正常に設定されていることを確認します。
-
-```
-network# ip a |grep 'LOOPBACK\|BROADCAST\|inet'
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default
-    inet 127.0.0.1/8 scope host lo
-    inet6 ::1/128 scope host
-2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq master ovs-system state UP group default qlen 1000
-    inet6 fe80::20c:29ff:fe61:9417/64 scope link
-3: eth1: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc mq state UP group default qlen 1000
-    inet 192.168.14.102/24 brd 192.168.14.255 scope global eth1
-    inet6 fe80::20c:29ff:fe61:9421/64 scope link
-4: ovs-system: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default
-5: br-ex: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN group default
-    inet 172.17.14.102/24 brd 172.17.14.255 scope global br-ex
-    inet6 fe80::20c:29ff:fe61:9417/64 scope link
-6: br-int: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default
-7: br-tun: <BROADCAST,MULTICAST> mtu 1500 qdisc noop state DOWN group default
-```
-
-### 10-11 Neutronサービスの動作の確認
-
-構築したNeutronのエージェントが正しく認識され、稼働していることを確認します。
-
-```
-controller# source admin-openrc.sh
-controller# neutron agent-list -c host -c alive -c binary
-+---------+-------+---------------------------+
-| host    | alive | binary                    |
-+---------+-------+---------------------------+
-| network | :-)   | neutron-dhcp-agent        |
-| network | :-)   | neutron-l3-agent          |
-| network | :-)   | neutron-metadata-agent    |
-| network | :-)   | neutron-openvswitch-agent |
-+---------+-------+---------------------------+
-```
-
-<!-- BREAK -->
-
-
-## 11. Neutronのインストール・設定（computeノード）
-
-### 11-1 パッケージインストール
+### 10-1 パッケージのインストール
 
 ```
 compute# apt-get update
-compute# apt-get install -y neutron-plugin-ml2 neutron-plugin-openvswitch-agent
+compute# apt-get install neutron-plugin-linuxbridge-agent
 ```
 
-### 11-2 設定の変更
+### 10-2 設定の変更
 
 + Neutronの設定
 
@@ -2562,16 +2331,11 @@ compute# vi /etc/neutron/neutron.conf
 
 [DEFAULT]
 ...
-verbose = True
 rpc_backend = rabbit                  ← アンコメント
 auth_strategy = keystone              ← アンコメント
 
-core_plugin = ml2                     ← 確認
-service_plugins = router              ← 追記
-allow_overlapping_ips = True          ← 追記
-
 [keystone_authtoken]（既存の設定はコメントアウトし、以下を追記）
-...auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(8-2で設定したもの)
+...auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(9-2で設定したもの)
 
 [database]
 # This line MUST be changed to actually run the plugin.
@@ -2596,60 +2360,60 @@ compute# less /etc/neutron/neutron.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 <!-- BREAK -->
 
-+ ML2 Plug-inの設定
++ Linux Bridge agentの設定
+
+PUBLIC_INTERFACE_NAMEにはパブリック側のネットワークに接続しているインターフェイスを指定します。OVERLAY_INTERFACE_IP_ADDRESSはパブリック側に接続しているNICに設定しているIPアドレスを指定します。
+
+追記と書かれていない項目は設定があればアンコメントして設定を変更、なければ追記してください。
 
 ```
-compute# vi /etc/neutron/plugins/ml2/ml2_conf.ini
+compute# vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 
-[ml2]
-type_drivers = flat,vlan,gre,vxlan  ← 追記
-tenant_network_types = gre          ← 追記
-mechanism_drivers = openvswitch     ← 追記
+[linux_bridge]
+physical_interface_mappings = public:PUBLIC_INTERFACE_NAME
 
-[ml2_type_gre]
-tunnel_id_ranges = 1:1000           ← 追記
+[vxlan]
+enable_vxlan = True
+local_ip = OVERLAY_INTERFACE_IP_ADDRESS
+l2_population = True
+
+[agent]
+...
+prevent_arp_spoofing = True   ← 追記
 
 [securitygroup]
-enable_security_group = True        ← 追記
-enable_ipset = True                 ← 追記
-firewall_driver = neutron.agent.linux.iptables_firewall.OVSHybridIptablesFirewallDriver     ← 追記
-
-[ovs]                               ← 追記
-local_ip = 192.168.0.103            ← 追記(computeノードのInternal側)
-enable_tunneling = True             ← 追記
-
-[agent]                             ← 追記
-tunnel_types = gre                  ← 追記
+...
+enable_security_group = True
+firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
+↑ 追記
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
 
 ```
-compute# less /etc/neutron/plugins/ml2/ml2_conf.ini | grep -v "^\s*$" | grep -v "^\s*#"
-```
-
-
-### 11-3 computeノードのOpen vSwitchサービスの再起動
-
-設定を反映させるため、computeノードのOpen vSwitchのサービスを再起動します。
-
-```
-compute# service openvswitch-switch restart
+compute# less /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
 <!-- BREAK -->
 
-### 11-4 computeノードのネットワーク設定
+### 10-3 コンピュートノードのネットワーク設定
 
 デフォルトではComputeはレガシーなネットワークを利用します。Neutronを利用するように設定を変更します。
 
 ```
 compute# vi /etc/nova/nova.conf
 
-[DEFAULT]...network_api_class = nova.network.neutronv2.api.APIsecurity_group_api = neutronlinuxnet_interface_driver = nova.network.linux_net.LinuxOVSInterfaceDriverfirewall_driver = nova.virt.firewall.NoopFirewallDriver
-
-[neutron]url = http://controller:9696auth_strategy = keystoneadmin_auth_url = http://controller:35357/v2.0
-admin_tenant_name = serviceadmin_username = neutronadmin_password = password       ← neutronユーザーのパスワード(8-2で設定したもの)
+[neutron]
+...
+url = http://controller:9696
+auth_url = http://controller:35357
+auth_plugin = password
+project_domain_id = default
+user_domain_id = default
+region_name = RegionOne
+project_name = service
+username = neutron
+password = password       ← neutronユーザーのパスワード(9-2で設定したもの)
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
@@ -2660,44 +2424,77 @@ compute# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 <!-- BREAK -->
 
-### 11-5 computeノードのNeutronと関連サービスを再起動
+### 10-4 computeノードのNeutronと関連サービスを再起動
 
-ネットワーク設定を反映させるため、compute1ノードのNeutronと関連のサービスを再起動します。
-
-```
-compute# service nova-compute restart && service neutron-plugin-openvswitch-agent restart
-```
-
-### 11-6 ログの確認
+ネットワーク設定を反映させるため、コンピュートノードのNeutronと関連のサービスを再起動します。
 
 ```
-compute# grep "ERROR\|WARNING" /var/log/neutron/*
+compute# service nova-compute restart && service neutron-plugin-linuxbridge-agent restart
 ```
 
- ※何も表示されなければ問題ありません。RabbitMQの接続確立に時間がかかり、その間「AMQP server on 127.0.0.1:5672 is unreachable」というエラーが出力される場合があります。
+### 10-5 ログの確認
 
-### 11-7 Neutronサービスの動作の確認
+```
+compute# tailf /var/log/nova/nova-compute.log
+compute# tailf /var/log/neutron/neutron-plugin-linuxbridge-agent.log
+```
 
-構築したNeutronのエージェントが正しく認識され、稼働していることを確認します。
+### 10-6 Neutronサービスの動作の確認
+
+`neutron agent-list`コマンドを実行してNeutronエージェントが正しく認識されており、稼働していることを確認します。
 
 ```
 controller# source admin-openrc.sh
 controller# neutron agent-list -c host -c alive -c binary
-+---------+-------+---------------------------+
-| host    | alive | binary                    |
-+---------+-------+---------------------------+
-| network | :-)   | neutron-dhcp-agent        |
-| network | :-)   | neutron-l3-agent          |
-| network | :-)   | neutron-metadata-agent    |
-| compute | :-)   | neutron-openvswitch-agent | ← 追加された出力
-| network | :-)   | neutron-openvswitch-agent |
-+---------+-------+---------------------------+
++------------+-------+---------------------------+
+| host       | alive | binary                    |
++------------+-------+---------------------------+
+| controller | :-)   | neutron-linuxbridge-agent |
+| compute    | :-)   | neutron-linuxbridge-agent |
+| controller | :-)   | neutron-dhcp-agent        |
+| controller | :-)   | neutron-metadata-agent    |
+| controller | :-)   | neutron-l3-agent          |
++------------+-------+---------------------------+
 ```
 
- ※コンピュートが追加され、正常に稼働していることが確認できれば問題ありません。
+ ※コントローラーとコンピュートで追加され、neutron-linuxbridge-agentが正常に稼働していることが確認できれば問題ありません。念のためログも確認してください。
 
 <!-- BREAK -->
 
+`neutron ext-list`コマンドを実行して、Neutron Serverが読み込んでいる拡張機能の一覧を出力し、必要なモジュールが読み込まれていることを確認します。
+
+```
++-----------------------+-----------------------------------------------+
+| alias                 | name                                          |
++-----------------------+-----------------------------------------------+
+| dns-integration       | DNS Integration                               |
+| ext-gw-mode           | Neutron L3 Configurable external gateway mode |
+| binding               | Port Binding                                  |
+| agent                 | agent                                         |
+| subnet_allocation     | Subnet Allocation                             |
+| l3_agent_scheduler    | L3 Agent Scheduler                            |
+| external-net          | Neutron external network                      |
+| flavors               | Neutron Service Flavors                       |
+| net-mtu               | Network MTU                                   |
+| quotas                | Quota management support                      |
+| l3-ha                 | HA Router extension                           |
+| provider              | Provider Network                              |
+| multi-provider        | Multi Provider Network                        |
+| extraroute            | Neutron Extra Route                           |
+| router                | Neutron L3 Router                             |
+| extra_dhcp_opt        | Neutron Extra DHCP opts                       |
+| security-group        | security-group                                |
+| dhcp_agent_scheduler  | DHCP Agent Scheduler                          |
+| rbac-policies         | RBAC Policies                                 |
+| port-security         | Port Security                                 |
+| allowed-address-pairs | Allowed Address Pairs                         |
+| dvr                   | Distributed Virtual Router                    |
++-----------------------+-----------------------------------------------+
+```
+
+<!-- BREAK -->
+<!--11/6ここまで編集完了-->
+<!--11/6ここまで構築完了-->
 
 ## 12. 仮想ネットワーク設定（controllerノード）
 
