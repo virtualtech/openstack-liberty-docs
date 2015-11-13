@@ -17,6 +17,7 @@ Version:0.9.0
 |:---|:---|:---|
 |0.9.0|2015/11/02|Liberty版開始|
 
+
 ````
 筆者注:このドキュメントはKilo版をベースに編集中です。
 ````
@@ -2045,6 +2046,10 @@ auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = de
 
 ```
 （前ページ/etc/neutron/neutron.confの続き）
+
+[oslo_concurrency]
+#lock_path = $state_path/lock     ← コメントアウト 
+lock_path = /var/lib/neutron/tmp  ← 追記
 [oslo_messaging_rabbit]（以下追記）...rabbit_host = controller
 rabbit_userid = openstack
 rabbit_password = password
@@ -2455,6 +2460,7 @@ controller# neutron agent-list -c host -c alive -c binary
 `neutron ext-list`コマンドを実行して、Neutron Serverが読み込んでいる拡張機能の一覧を出力し、必要なモジュールが読み込まれていることを確認します。
 
 ```
+controller# neutron ext-list
 +-----------------------+-----------------------------------------------+
 | alias                 | name                                          |
 +-----------------------+-----------------------------------------------+
@@ -2484,14 +2490,13 @@ controller# neutron agent-list -c host -c alive -c binary
 ```
 
 <!-- BREAK -->
-<!--11/6ここまで構築完了-->
-<!--11/13ここまで編集完了-->
 
-## 12. 仮想ネットワーク設定（コントローラーノード）
 
-### 12-1 外部接続ネットワークの設定
+## 11. 仮想ネットワーク設定（コントローラーノード）
 
-#### 12-1-1 admin環境変数読み込み
+### 11-1 外部接続ネットワークの設定
+
+#### 11-1-1 admin環境変数読み込み
 
 外部接続用ネットワーク作成するためにadmin環境変数を読み込みます。
 
@@ -2499,39 +2504,41 @@ controller# neutron agent-list -c host -c alive -c binary
 controller# source admin-openrc.sh
 ```
 
-#### 12-1-2 外部ネットワーク作成
+#### 11-1-2 外部ネットワーク作成
 
 ext-netという名前で外部用ネットワークを作成します。
 
 ```
-controller# neutron net-create ext-net --router:external \--provider:physical_network external --provider:network_type flat
+controller(admin)# neutron net-create ext-net --router:external \
+ --provider:physical_network public --provider:network_type flat 
 Created a new network:
 +---------------------------+--------------------------------------+
 | Field                     | Value                                |
 +---------------------------+--------------------------------------+
 | admin_state_up            | True                                 |
-| id                        | 37bc47f1-e8b9-4d43-ab3b-c1926b2b42b3 |
+| id                        | 78983ca2-77e3-4cdf-9747-ae1b34addeb7 |
 | mtu                       | 0                                    |
 | name                      | ext-net                              |
+| port_security_enabled     | True                                 |
 | provider:network_type     | flat                                 |
-| provider:physical_network | external                             |
+| provider:physical_network | public                               |
 | provider:segmentation_id  |                                      |
 | router:external           | True                                 |
 | shared                    | False                                |
 | status                    | ACTIVE                               |
 | subnets                   |                                      |
-| tenant_id                 | 218010a87fe5477bba7f5e25c8211614     |
+| tenant_id                 | e7a1bb2fb5a1488fbdd761136d0d9daa     |
 +---------------------------+--------------------------------------+
 ```
 
 <!-- BREAK -->
 
-#### 12-1-3 外部ネットワーク用サブネット作成
+#### 11-1-3 外部ネットワーク用サブネット作成
 
 ext-subnetという名前で外部ネットワーク用サブネットを作成します。
 
 ```
-controller# neutron subnet-create ext-net --name ext-subnet \
+controller(admin)# neutron subnet-create ext-net --name ext-subnet \
   --allocation-pool start=10.0.0.200,end=10.0.0.250 \
   --disable-dhcp --gateway 10.0.0.1 10.0.0.0/24
 Created a new subnet:
@@ -2544,20 +2551,20 @@ Created a new subnet:
 | enable_dhcp       | False                                              |
 | gateway_ip        | 10.0.0.1                                           |
 | host_routes       |                                                    |
-| id                | 406b93cb-3f55-49b3-8ce4-74259ac00526               |
+| id                | ae350158-4b24-4731-8242-e3069785d322               |
 | ip_version        | 4                                                  |
 | ipv6_address_mode |                                                    |
 | ipv6_ra_mode      |                                                    |
 | name              | ext-subnet                                         |
-| network_id        | daf2a1a8-615d-4105-bfb4-60a8380350ef               |
+| network_id        | 78983ca2-77e3-4cdf-9747-ae1b34addeb7               |
 | subnetpool_id     |                                                    |
-| tenant_id         | 218010a87fe5477bba7f5e25c8211614                   |
+| tenant_id         | e7a1bb2fb5a1488fbdd761136d0d9daa                   |
 +-------------------+----------------------------------------------------+
 ```
 
-### 12-2 インスタンス用ネットワーク設定
+### 11-2 インスタンス用ネットワーク設定
 
-#### 12-2-1 demo環境変数読み込み
+#### 11-2-1 demo環境変数読み込み
 
 インスタンス用ネットワーク作成するためにdemo環境変数読み込みます。
 
@@ -2567,26 +2574,27 @@ controller# source demo-openrc.sh
 
 <!-- BREAK -->
 
-#### 12-2-2 インスタンス用ネットワーク作成
+#### 11-2-2 インスタンス用ネットワーク作成
 
 demo-netという名前でインスタンス用ネットワークを作成します。
 
 ```
-controller# neutron net-create demo-net
+controller(demo)# neutron net-create demo-net
 Created a new network:
-+-----------------+--------------------------------------+
-| Field           | Value                                |
-+-----------------+--------------------------------------+
-| admin_state_up  | True                                 |
-| id              | de074cba-bcad-47ca-ab6d-058a974000b5 |
-| mtu             | 0                                    |
-| name            | demo-net                             |
-| router:external | False                                |
-| shared          | False                                |
-| status          | ACTIVE                               |
-| subnets         |                                      |
-| tenant_id       | 3ed2437abf474a37b305338666d9fafa     |
-+-----------------+--------------------------------------+
++-----------------------+--------------------------------------+
+| Field                 | Value                                |
++-----------------------+--------------------------------------+
+| admin_state_up        | True                                 |
+| id                    | 5b6a8b87-fd03-46b5-a968-72bac5091b7c |
+| mtu                   | 0                                    |
+| name                  | demo-net                             |
+| port_security_enabled | True                                 |
+| router:external       | False                                |
+| shared                | False                                |
+| status                | ACTIVE                               |
+| subnets               |                                      |
+| tenant_id             | b93bc87be9ed41219e8f9c8b5b74dea2     |
++-----------------------+--------------------------------------+
 ```
 
 #### 11-2-3 インスタンス用ネットワークサブネット作成
@@ -2594,142 +2602,133 @@ Created a new network:
 demo-subnetという名前でインスタンス用ネットワークサブネットを作成します。
 
 ```
-controller# neutron subnet-create demo-net 192.168.0.0/24 \--name demo-subnet --gateway 192.168.0.1 --dns-nameserver 8.8.8.8
+controller(demo)# neutron subnet-create demo-net 192.168.0.0/24 \--name demo-subnet --gateway 192.168.0.1 --dns-nameserver 8.8.8.8
 Created a new subnet:
 +-------------------+--------------------------------------------------+
 | Field             | Value                                            |
 +-------------------+--------------------------------------------------+
 | allocation_pools  | {"start": "192.168.0.2", "end": "192.168.0.254"} |
 | cidr              | 192.168.0.0/24                                   |
-| dns_nameservers   |                                                  |
+| dns_nameservers   | 8.8.8.8                                          |
 | enable_dhcp       | True                                             |
 | gateway_ip        | 192.168.0.1                                      |
 | host_routes       |                                                  |
-| id                | 92b87319-b287-4bcc-988c-003215c1580a             |
+| id                | ed0190db-1f51-40e0-babe-3c71fa541f40             |
 | ip_version        | 4                                                |
 | ipv6_address_mode |                                                  |
 | ipv6_ra_mode      |                                                  |
 | name              | demo-subnet                                      |
-| network_id        | 6be6a7ef-ef68-4c84-9b3f-0a6e41aee52b             |
+| network_id        | 5b6a8b87-fd03-46b5-a968-72bac5091b7c             |
 | subnetpool_id     |                                                  |
-| tenant_id         | 3ed2437abf474a37b305338666d9fafa                 |
+| tenant_id         | b93bc87be9ed41219e8f9c8b5b74dea2                 |
 +-------------------+--------------------------------------------------+
 ```
 
 <!-- BREAK -->
 
-### 12-3 仮想ネットワークルーター設定
+### 11-3 仮想ネットワークルーター設定
 
 仮想ネットワークルーターを作成して外部接続用ネットワークとインスタンス用ネットワークをルーターに接続し、双方でデータのやり取りを行えるようにします。
 
 
-#### 12-3-1 demo-routerを作成
+#### 11-3-1 demo-routerを作成
 
 仮想ネットワークルータを作成します。
 
 ```
-controller# neutron router-create demo-router
+controller(demo)# neutron router-create demo-router
 Created a new router:
 +-----------------------+--------------------------------------+
 | Field                 | Value                                |
 +-----------------------+--------------------------------------+
 | admin_state_up        | True                                 |
 | external_gateway_info |                                      |
-| id                    | 8dea222a-cf31-4de0-a946-891026c21364 |
+| id                    | 006df4cc-6fb2-40e7-af58-dc68b6755165 |
 | name                  | demo-router                          |
 | routes                |                                      |
 | status                | ACTIVE                               |
-| tenant_id             | 3ed2437abf474a37b305338666d9fafa     |
+| tenant_id             | b93bc87be9ed41219e8f9c8b5b74dea2     |
 +-----------------------+--------------------------------------+
 ```
 
-#### 12-3-2 demo-routerにsubnetを追加
+#### 11-3-2 demo-routerにsubnetを追加
 
 仮想ネットワークルーターにインスタンス用ネットワークを接続します。
 
 ```
-controller# neutron router-interface-add demo-router demo-subnet
-Added interface a66a184a-55b3-49d8-bbbf-3bbf2fe32de2 to router demo-router.
+controller(demo)# neutron router-interface-add demo-router demo-subnet
+Added interface 7337070d-455f-406d-8ebd-24dba7deea3a to router demo-router.
 ```
 
-#### 12-3-3 demo-routerにgatewayを追加
+#### 11-3-3 demo-routerにgatewayを追加
 
 仮想ネットワークルーターに外部ネットワークを接続します。
 
 ```
-controller# neutron router-gateway-set demo-router ext-net
+controller(demo)# neutron router-gateway-set demo-router ext-net
 Set gateway for router demo-router
 ```
 
 <!-- BREAK -->
 
-## 13. 仮想ネットワーク設定確認（networkノード）
-
-### 13-1 仮想ネットワークルーターの確認
-
-以下コマンドで仮想ネットワークルーターが作成されているか確認します。
+### 11-4 ネットワークの確認
 
 ```
-network# ip netns
-qdhcp-ed07c38c-8609-43d8-ae02-582f9f202a3e
-qrouter-7c1ca8eb-eaa0-4a68-843d-daca30824693
+controller(admin)# source admin-openrc.sh
+controller(admin)# neutron net-list -c name
+(Neutronネットワーク一覧の表示)
++----------+
+| name     |
++----------+
+| ext-net  |
+| demo-net |
++----------+
+
+controller(admin)# neutron subnet-list -c name
+(Neutronネットワークサブネット一覧の表示)
++-------------+
+| name        |
++-------------+
+| ext-subnet  |
+| demo-subnet |
++-------------+
+controller(admin)# neutron port-list -c id -c fixed_ips --max-width 20
+(ネットワークポート一覧の表示)
++----------------------+----------------------+
+| id                   | fixed_ips            |
++----------------------+----------------------+
+| 7337070d-455f-406d-  | {"subnet_id":        |
+| 8ebd-24dba7deea3a    | "ed0190db-1f51-40e0  |
+|                      | -babe-3c71fa541f40", |
+|                      | "ip_address":        |
+|                      | "192.168.0.1"}       |
+| 9477c16b-e5c2-430b-  | {"subnet_id": "ae350 |
+| b4b4-37d415fe9602    | 158-4b24-4731-8242-e |
+|                      | 3069785d322",        |
+|                      | "ip_address":        |
+|                      | "10.0.0.200"}        |
+| b14a20ba-5fe9-4953-8 | {"subnet_id":        |
+| a36-d18cdfbc64b5     | "ed0190db-1f51-40e0  |
+|                      | -babe-3c71fa541f40", |
+|                      | "ip_address":        |
+|                      | "192.168.0.2"}       |
++----------------------+----------------------+
+controller(admin)# neutron port-show 9477c16b-e5c2-430b-b4b4-37d415fe9602 -F device_owner --max-width 24
+(IPアドレス10.0.0.200を持つデバイスを確認)
++--------------+------------------------+
+| Field        | Value                  |
++--------------+------------------------+
+| device_owner | network:router_gateway |
++--------------+------------------------+
+# ping -c 3 10.0.0.200|grep "packet loss"
+3 packets transmitted, 3 received, 0% packet loss, time 1999ms
+(ルーターゲートウェイ宛に各ノードからpingコマンドの実行)
 ```
 
-※qrouter~~ という名前の行が表示されていれば問題ありません。
+※応答が返ってくれば問題ありません。
 
-### 13-2 仮想ルーターのネームスペースのIPアドレスを確認
 
-仮想ルーターと外部用ネットワークの接続を確認します。
-
-```
-network# ip netns exec `ip netns | grep qrouter` ip addr
-1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default
-    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
-    inet 127.0.0.1/8 scope host lo
-       valid_lft forever preferred_lft forever
-    inet6 ::1/128 scope host
-       valid_lft forever preferred_lft forever
-13: qr-65249869-77: <BROADCAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN group default
-    link/ether fa:16:3e:d0:df:2c brd ff:ff:ff:ff:ff:ff
-    inet 192.168.0.1/24 brd 192.168.0.255 scope global qr-65249869-77
-       valid_lft forever preferred_lft forever
-    inet6 fe80::f816:3eff:fed0:df2c/64 scope link
-       valid_lft forever preferred_lft forever
-14: qg-bd7c5797-3f: <BROADCAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UNKNOWN group default
-    link/ether fa:16:3e:35:80:8f brd ff:ff:ff:ff:ff:ff
-    inet 10.0.0.200/24 brd 10.0.0.255 scope global qg-bd7c5797-3f
-       valid_lft forever preferred_lft forever
-    inet6 fe80::f816:3eff:fe35:808f/64 scope link
-       valid_lft forever preferred_lft forever
-```
-
-※外部アドレス（この環境では10.0.0.0/24）のアドレスを確認します。
-
-<!-- BREAK -->
-
-### 13-3 仮想ゲートウェイの疎通確認
-
-仮想ルーターの外から仮想ルーターに対して疎通可能かを確認します。
-
-```
-network# ping 10.0.0.200
-PING 10.0.0.200 (10.0.0.200) 56(84) bytes of data.
-64 bytes from 10.0.0.200: icmp_seq=1 ttl=64 time=1.17 ms
-64 bytes from 10.0.0.200: icmp_seq=2 ttl=64 time=0.074 ms
-64 bytes from 10.0.0.200: icmp_seq=3 ttl=64 time=0.061 ms
-64 bytes from 10.0.0.200: icmp_seq=4 ttl=64 time=0.076 ms
-```
-
-仮想ルーターからゲートウェイ、外部ネットワークにアクセス可能か確認します。
-
-```
-network# ip netns exec `ip netns | grep qrouter` ping 10.0.0.1
-network# ip netns exec `ip netns | grep qrouter` ping virtualtech.jp
-```
-
-※応答が返ってくれば問題ありません。各ノードからPingコマンドによる疎通確認を実行しましょう。
-
-### 13-4 インスタンスの起動確認
+### 11-5 インスタンスの起動確認
 
 controller、network、computeノードの最低限の構成が出来上がってので、ここでOpenStack環境がうまく動作しているか確認しましょう。
 まずはコマンドを使ってインスタンスを起動するために必要な情報を集める所から始めます。環境設定ファイルを読み込んで、各コマンドを実行し、情報を集めてください。
@@ -2741,15 +2740,15 @@ controller# glance image-list
 +--------------------------------------+---------------------+
 | ID                                   | Name                |
 +--------------------------------------+---------------------+
-| 572104d5-a901-4432-be41-17e37901a5f7 | cirros-0.3.4-x86_64 |
+| debb1779-fb3c-42a7-aa18-4f6d0c9446f7 | cirros-0.3.4-x86_64 |
 +--------------------------------------+---------------------+
 
 controller# neutron net-list -c name -c id
 +----------+--------------------------------------+
 | name     | id                                   |
 +----------+--------------------------------------+
-| demo-net | 858c0fe5-ea00-4426-aa4e-f2a2484b2471 |
-| ext-net  | e0cbae79-2973-4870-93de-09dfbd3e76e4 |
+| ext-net  | 78983ca2-77e3-4cdf-9747-ae1b34addeb7 |
+| demo-net | 5b6a8b87-fd03-46b5-a968-72bac5091b7c |
 +----------+--------------------------------------+
 
 controller# nova secgroup-list
@@ -2797,7 +2796,8 @@ Request to delete server vm1 has been accepted.
 ```
 
 <!-- BREAK -->
-
+<!--11/13ここまで構築完了-->
+<!--11/13ここまで編集完了-->
 
 ## 14. Cinderインストール（controllerノード）
 
