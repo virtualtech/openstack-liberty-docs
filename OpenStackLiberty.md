@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:0.9.0
+Version:0.9.1
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：0.9.0 (2015/11/02作成)<br>
+バージョン：0.9.1 (2015/11/13作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -15,11 +15,14 @@ Version:0.9.0
 
 |バージョン|更新日|更新内容|
 |:---|:---|:---|
-|0.9.0|2015/11/02|Liberty版開始|
+|0.9.0|2015/11/02|Liberty版執筆開始|
+|0.9.1|2015/11/13|Liberty版Beta1|
 
 
 ````
-筆者注:このドキュメントはKilo版をベースに編集中です。
+筆者注:このドキュメントはKilo版をベースに編集中です。提案や誤りの指摘は
+Issue登録か、日本仮想化技術までメールにてお願いします。
+https://github.com/virtualtech/openstack-liberty-docs/issues
 ````
 
 <!-- BREAK -->
@@ -43,22 +46,23 @@ Canonical社が提供するCloud Archiveリポジトリーを使って、OpenSta
 
 本書はCanonicalのUbuntu ServerとCloud Archiveリポジトリーのパッケージを使って、OpenStack Libertyを構築する手順を解説したものです。
 
-OSは以下のURLよりイメージをダウンロードしたUbuntu Server 14.04.1 LTS(以下Ubuntu Server)のイメージを使ってインストールします。インストール後`apt-get dist-upgrade`を行って最新のアップデートを適用した状態にしてください。
+Ubuntu Serverでは新しいハードウェアのサポートを積極的に行うディストリビューションです。そのため、Linux KernelのバージョンをTrustyの場合は14.04.2以降のLTSのポイントリリースごとに、スタンダート版のUbuntuと同様のバージョンに置き換えてリリースしています。
+- <https://wiki.ubuntu.com/Kernel/LTSEnablementStack>
 
-本書は3.13.0-67以降のバージョンのカーネルで動作するUbuntu 14.04.3を想定しています。
+一般的な利用では特に問題ありませんが、OpenStackとSDNのソリューションを連携した環境を作る場合などに、Linux KernelやOSのバージョンを考慮しなくてはならない場合があります。
+また、Trustyの場合はLinux Kernel v3.13以外のバージョンのサポート期間は18ヶ月になっています。期限が切れた後はLinux Kernel v3.13にダウングレードするか、手動で新しいLinux Kernelをインストールすることができるメタパッケージを導入する必要がありますので注意してください。
+
+本書ではサポート期間が長く、Trustyの初期リリースの標準カーネルであるLinux Kernel v3.13を使うために、以下のURLよりイメージをダウンロードしたUbuntu Server 14.04.1 LTS(以下Ubuntu Server)のイメージを使ってインストールします。インストール後`apt-get dist-upgrade`を行って最新のアップデートを適用した状態にしてください。Trustyではこのコマンドを実行してもカーネルのバージョンがアップグレードすることはありません。
+
+本書は3.13.0-68以降のバージョンのカーネルで動作するUbuntu 14.04.3を想定しています。
 
 - <http://old-releases.ubuntu.com/releases/14.04.1/ubuntu-14.04.1-server-amd64.iso>
 
-
-### 1-2 サーバーの構成について
-
-本書はOpenStack環境をSQL,Controller,Computeの3台のサーバー上に構築することを想定しています。
-
 <!-- BREAK -->
 
-### 1-3 作成するサーバー（ノード）
+### 1-2 作成するサーバー（ノード）
 
-今回構築するOpenStack環境は、以下3台のサーバーに次のような構成でセットアップします。
+本書はOpenStack環境をSQL,Controller,Computeの3台のサーバー上に構築することを想定しています。
 
 SQL           | コントローラー | コンピュート 
 ------------- | -------------- | --------------
@@ -77,7 +81,7 @@ MariaDB       | RabbitMQ       | Linux KVM
 
 <!-- BREAK -->
 
-### 1-4 ネットワークセグメントの設定
+### 1-3 ネットワークセグメントの設定
 
 今回は2つのネットワークセグメントを用意し構成しています。
 
@@ -102,7 +106,7 @@ IPアドレスは以下の構成で構築されている前提で解説します
 
 <!-- BREAK -->
 
-### 1-5 各ノードのネットワーク設定
+### 1-4 各ノードのネットワーク設定
 
 各ノードのネットワーク設定は以下の通りです。
 
@@ -135,9 +139,9 @@ IPアドレスは以下の構成で構築されている前提で解説します
 
 <!-- BREAK -->
 
-### 1-6 Ubuntu Serverのインストール
+### 1-5 Ubuntu Serverのインストール
 
-#### 1-6-1 インストール
+#### 1-5-1 インストール
 
 3台のサーバーに対し、Ubuntu Serverをインストールします。要点は以下の通りです。
 
@@ -159,16 +163,16 @@ IPアドレスは以下の構成で構築されている前提で解説します
 |キーボードレイアウトの認識|No|
 |キーボードの言語|Japanese→Japanese|
 |優先するNIC|eth0: Ethernet|
-|ホスト名|それぞれのノード名(controller, network, compute1)|
+|ホスト名|それぞれのノード名(sql, controller, compute)|
+|ユーザ名とパスワード|フルネームで入力|
+|アカウント名|ユーザ名のファーストネームで設定される|
+|パスワード|任意のパスワード|
+|Weak password（出ない場合も）|Yesを選択|
 
 <!-- BREAK -->
 
 |設定項目|設定例|
 |:---|:---|
-|ユーザ名とパスワード|フルネームで入力|
-|アカウント名|ユーザ名のファーストネームで設定される|
-|パスワード|任意のパスワード|
-|Weak password（出ない場合も）|Yesを選択|
 |ホームの暗号化|任意|
 |タイムゾーン|Asia/Tokyoであることを確認|
 |パーティション設定|Guided - use entire disk and set up LVM|
@@ -189,7 +193,7 @@ Ubuntu Serverで日本語の言語を設定した場合、標準出力や標準�
 ```
 
 
-#### 1-6-2 プロキシーの設定
+#### 1-5-2 プロキシーの設定
 
 外部ネットワークとの接続にプロキシーの設定が必要な場合は、aptコマンドを使ってパッケージの照会やダウンロードを行うために次のような設定をする必要があります。
 
@@ -216,7 +220,7 @@ Acquire::https::proxy "https://proxy.example.com:8080/";
 
 <!-- BREAK -->
 
-### 1-7 Ubuntu Serverへのログインとroot権限
+### 1-6 Ubuntu Serverへのログインとroot権限
 
 Ubuntuはデフォルト設定でrootユーザーの利用を許可していないため、root権限が必要となる作業は以下のように行ってください。
 
@@ -224,7 +228,7 @@ Ubuntuはデフォルト設定でrootユーザーの利用を許可していな�
 + root権限が必要な場合には、sudoコマンドを使用する。
 + rootで連続して作業したい場合には、sudo -iコマンドでシェルを起動する。
 
-### 1-8 設定ファイル等の記述について
+### 1-7 設定ファイル等の記述について
 
 + 設定ファイルは特別な記述が無い限り、必要な設定を抜粋したものです。
 + 特に変更の必要がない設定項目は省略されています。
@@ -323,9 +327,6 @@ auto eth1
        netmask 255.255.255.0
 ```
 
-<!-- BREAK -->
-
-
 #### 2-1-4 ネットワークの設定を反映
 
 各ノードで変更した設定を反映させるため、ホストを再起動します。
@@ -375,7 +376,6 @@ controller
 
 <!-- BREAK -->
 
-
 ### 2-3 リポジトリーの設定とパッケージの更新
 
 コントローラーノードとコンピュートノードで以下のコマンドを実行し、Liberty向けUbuntu Cloud Archiveリポジトリを登録します。
@@ -408,6 +408,7 @@ OK
 controller# apt-get install python-openstackclient
 ```
 
+<!-- BREAK -->
 
 ### 2-5 時刻同期サーバーのインストールと設定
 
@@ -487,6 +488,8 @@ MS Name/IP address         Stratum Poll Reach LastRx Last sample
 ^* lib-controller                3   6    77    25   -509us[-1484us] +/-   13ms
 ```
 
+<!-- BREAK -->
+
 ### 2-6 Python用MySQL/MariaDBクライアントのインストール
 
 コントローラーノードとコンピュートノードでPython用のMySQL/MariaDBクライアントをインストールします。
@@ -516,7 +519,6 @@ sql# apt-get install -y mariadb-server
 インストール中にパスワードの入力を要求されますので、MariaDBのrootユーザーに対するパスワードを設定します。
 本例ではパスワードとして「password」を設定します。
 
-
 #### 3-1-2 MariaDBの設定を変更
 
 MariaDBの設定ファイルmy.cnfを開き以下の設定を変更します。
@@ -540,6 +542,8 @@ collation-server = utf8_general_ci          ← 追記
 init-connect = 'SET NAMES utf8'             ← 追記
 character-set-server = utf8                 ← 追記
 ```
+
+<!-- BREAK -->
 
 #### 3-1-3 MariaDBサービスの再起動
 
@@ -805,8 +809,6 @@ EOF
 Enter password: ← MariaDBのrootパスワードpasswordを入力
 ```
 
-<!-- BREAK -->
-
 ### 5-2 データベースの確認
 
 SQLノードにユーザーkeystoneでログインしデータベースの閲覧が可能であることを確認します。
@@ -826,6 +828,8 @@ MariaDB [(none)]> show databases;
 +--------------------+
 2 rows in set (0.00 sec)
 ```
+
+<!-- BREAK -->
 
 ### 5-3 admin_tokenの決定
 
@@ -1112,6 +1116,8 @@ Repeat User Password: password
 | name      | demo                             |
 +-----------+----------------------------------+
 ```
+
+<!-- BREAK -->
 
 + userロールの作成
 ```
@@ -1636,8 +1642,6 @@ controller# openstack endpoint create --region RegionOne \
   compute admin http://controller:8774/v2/%\(tenant_id\)s
 ```
 
-<!-- BREAK -->
-
 ### 7-4 パッケージのインストール
 
 apt-getコマンドでNova関連のパッケージをインストールします。
@@ -1646,6 +1650,8 @@ apt-getコマンドでNova関連のパッケージをインストールします
 controller# apt-get install -y nova-api nova-cert nova-conductor nova-consoleauth nova-novncproxy \
 nova-scheduler python-novaclient
 ```
+
+<!-- BREAK -->
 
 ### 7-5 Novaの設定を変更
 
@@ -1682,6 +1688,14 @@ enabled_apis=osapi_compute,metadata
 vncserver_listen = 10.0.0.101               ←追記
 vncserver_proxyclient_address = 10.0.0.101  ←追記
 
+（次ページに続きます...）
+```
+
+<!-- BREAK -->
+
+```
+（前ページ/etc/nova/nova.confの続き）
+...
 (↓これ以下追記↓)
 [database]
 connection = mysql+pymysql://nova:password@sql/nova
@@ -2011,7 +2025,7 @@ controller# apt-get install neutron-server neutron-plugin-ml2 \
 
 ### 9-5 Neutronコンポーネントの設定を変更
 
-+ Neutron Serverの設定
++ Neutronサーバーの設定
 
 ```
 controller# vi /etc/neutron/neutron.conf 
@@ -2035,10 +2049,6 @@ project_domain_id = default
 user_domain_id = default
 project_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(9-2で設定したもの)
 
-[nova]（以下末尾に追記）
-...
-auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultregion_name = RegionOneproject_name = serviceusername = novapassword = password     ← novaユーザーのパスワード(6-2で設定したもの)
-
 （次ページに続きます...）
 ```
 
@@ -2046,6 +2056,10 @@ auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = de
 
 ```
 （前ページ/etc/neutron/neutron.confの続き）
+
+[nova]（以下末尾に追記）
+...
+auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultregion_name = RegionOneproject_name = serviceusername = novapassword = password     ← novaユーザーのパスワード(6-2で設定したもの)
 
 [oslo_concurrency]
 #lock_path = $state_path/lock     ← コメントアウト 
@@ -2062,6 +2076,8 @@ rabbit_password = password
 ```
 controller# less /etc/neutron/neutron.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
+
+<!-- BREAK -->
 
 + ML2プラグインの設定
 
@@ -2096,7 +2112,7 @@ controller# less /etc/neutron/plugins/ml2/ml2_conf.ini | grep -v "^\s*$" | grep 
 
 <!-- BREAK -->
 
-+ Linux bridge agentの設定
++ Linuxブリッジエージェントの設定
 
 PUBLIC_INTERFACE_NAMEをパブリックネットワークに接続している側のNICを指定します。
 
@@ -2116,7 +2132,7 @@ local_ip = OVERLAY_INTERFACE_IP_ADDRESS    ← 追記
 l2_population = True                       ← 追記
 ```
 
-Agentとセキュリティグループの設定を行います。
+エージェントとセキュリティグループの設定を行います。
 
 ```
 [agent]
@@ -2136,7 +2152,7 @@ firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
 controller# less /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-+ Layer-3 agentの設定
++ Layer-3エージェントの設定
 
 external_network_bridgeは単一のエージェントで複数の外部ネットワークを有効にするには値を指定する必要はないため、値を空白にします。
 
@@ -2149,7 +2165,7 @@ interface_driver = neutron.agent.linux.interface.BridgeInterfaceDriver
 external_network_bridge =
 ```
 
-+ DHCP agentの設定
++ DHCPエージェントの設定
 
 ```
 # vi /etc/neutron/dhcp_agent.ini 
@@ -2165,7 +2181,7 @@ enable_isolated_metadata = True
 
 一般的にデフォルトのイーサネットのMTUは1500に設定されています。通常のEthernet フレームにVXLANヘッダが加算されるため、VXLANを使う場合は少なくとも50バイト多い、1550バイト以上のMTUが設定されていないと通信が不安定になったり、通信が不可能になる場合があります。これらはジャンボフレームを設定することで約9000バイトまでのMTUをサポートできるようになり対応可能ですが、ジャンボフレーム非対応のネットワーク機器を使う場合や、ネットワーク機器の設定を変更できない場合はVXLANの50バイトのオーバーヘッドを考慮して1450バイト以内のMTUに設定する必要があります。これらの制約事項はOpenStack環境でも同様で、インスタンスを起動する際にMTU 1450を設定することで、この問題を回避可能です。この設定はインスタンス起動毎にUserDataを使って設定することも可能ですが、次のように設定しておくと仮想DHCPサーバーでMTUの自動設定を行うことができるので便利です。
 
-+ DHCP agentにdnsmasqの設定を追記
++ DHCPエージェントにdnsmasqの設定を追記
 
 ```
 # vi /etc/neutron/dhcp_agent.ini 
@@ -2183,7 +2199,7 @@ dnsmasq_config_file = /etc/neutron/dnsmasq-neutron.conf  ← 追記
 dhcp-option-force=26,1450
 ```
 
-+ Metadata agentの設定
++ Metadataエージェントの設定
 
 インスタンスのメタデータサービスを提供するMetadata agentを設定します。
 
@@ -2346,17 +2362,15 @@ rabbit_userid = openstack          ← 追記
 rabbit_password = password         ← 追記
 ```
 
-本書の構成では、コンピュートノードのNeutron.confにはデータベースの指定は不要です。
+<!-- BREAK -->
 
-次のコマンドを実行して正しく設定を行ったか確認します。
+本書の構成では、コンピュートノードのNeutron.confにはデータベースの指定は不要です。次のコマンドを実行して正しく設定を行ったか確認します。
 
 ```
 compute# less /etc/neutron/neutron.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-<!-- BREAK -->
-
-+ Linux Bridge agentの設定
++ Linuxブリッジエージェントの設定
 
 PUBLIC_INTERFACE_NAMEにはパブリック側のネットワークに接続しているインターフェイスを指定します。OVERLAY_INTERFACE_IP_ADDRESSはパブリック側に接続しているNICに設定しているIPアドレスを指定します。
 
@@ -2675,44 +2689,22 @@ Set gateway for router demo-router
 
 ```
 controller(admin)# source admin-openrc.sh
-controller(admin)# neutron net-list -c name
-(Neutronネットワーク一覧の表示)
-+----------+
-| name     |
-+----------+
-| ext-net  |
-| demo-net |
-+----------+
-
-controller(admin)# neutron subnet-list -c name
-(Neutronネットワークサブネット一覧の表示)
-+-------------+
-| name        |
-+-------------+
-| ext-subnet  |
-| demo-subnet |
-+-------------+
 controller(admin)# neutron port-list -c id -c fixed_ips --max-width 20
 (ネットワークポート一覧の表示)
-+----------------------+----------------------+
-| id                   | fixed_ips            |
-+----------------------+----------------------+
-| 7337070d-455f-406d-  | {"subnet_id":        |
-| 8ebd-24dba7deea3a    | "ed0190db-1f51-40e0  |
-|                      | -babe-3c71fa541f40", |
-|                      | "ip_address":        |
-|                      | "192.168.0.1"}       |
-| 9477c16b-e5c2-430b-  | {"subnet_id": "ae350 |
-| b4b4-37d415fe9602    | 158-4b24-4731-8242-e |
-|                      | 3069785d322",        |
-|                      | "ip_address":        |
-|                      | "10.0.0.200"}        |
-| b14a20ba-5fe9-4953-8 | {"subnet_id":        |
-| a36-d18cdfbc64b5     | "ed0190db-1f51-40e0  |
-|                      | -babe-3c71fa541f40", |
-|                      | "ip_address":        |
-|                      | "192.168.0.2"}       |
-+----------------------+----------------------+
++--------------------------+--------------------------+
+| id                       | fixed_ips                |
++--------------------------+--------------------------+
+| 7337070d-455f-406d-8ebd- | {"subnet_id": "ed0190db- |
+| 24dba7deea3a             | 1f51-40e0-babe-          |
+|                          | 3c71fa541f40",           |
+|                          | "ip_address":            |
+|                          | "192.168.0.1"}           |
+| b14a20ba-5fe9-4953-8a36- | {"subnet_id": "ed0190db- |
+| d18cdfbc64b5             | 1f51-40e0-babe-          |
+|                          | 3c71fa541f40",           |
+|                          | "ip_address":            |
+|                          | "192.168.0.2"}           |
++--------------------------+--------------------------+
 controller(admin)# neutron port-show 9477c16b-e5c2-430b-b4b4-37d415fe9602 -F device_owner --max-width 24
 (IPアドレス10.0.0.200を持つデバイスを確認)
 +--------------+------------------------+
@@ -2730,44 +2722,47 @@ controller(admin)# neutron port-show 9477c16b-e5c2-430b-b4b4-37d415fe9602 -F dev
 
 ### 11-5 インスタンスの起動確認
 
-controller、network、computeノードの最低限の構成が出来上がってので、ここでOpenStack環境がうまく動作しているか確認しましょう。
+OpenStackの最低限の構成ができあがったので、ここでOpenStack環境がうまく動作しているか確認しましょう。
 まずはコマンドを使ってインスタンスを起動するために必要な情報を集める所から始めます。環境設定ファイルを読み込んで、各コマンドを実行し、情報を集めてください。
 
 ```
 controller# source demo-openrc.sh
-
-controller# glance image-list
+controller# openstack image list
+(起動イメージ一覧を表示)
 +--------------------------------------+---------------------+
 | ID                                   | Name                |
 +--------------------------------------+---------------------+
 | debb1779-fb3c-42a7-aa18-4f6d0c9446f7 | cirros-0.3.4-x86_64 |
 +--------------------------------------+---------------------+
 
-controller# neutron net-list -c name -c id
-+----------+--------------------------------------+
-| name     | id                                   |
-+----------+--------------------------------------+
-| ext-net  | 78983ca2-77e3-4cdf-9747-ae1b34addeb7 |
-| demo-net | 5b6a8b87-fd03-46b5-a968-72bac5091b7c |
-+----------+--------------------------------------+
+controller# openstack network list -c ID -c Name
+(ネットワーク一覧を表示)
++--------------------------------------+----------+
+| ID                                   | Name     |
++--------------------------------------+----------+
+| 78983ca2-77e3-4cdf-9747-ae1b34addeb7 | ext-net  |
+| 5b6a8b87-fd03-46b5-a968-72bac5091b7c | demo-net |
++--------------------------------------+----------+
 
-controller# nova secgroup-list
-+--------------------------------------+---------+------------------------+
-| Id                                   | Name    | Description            |
-+--------------------------------------+---------+------------------------+
-| a66e2962-312f-45a4-bfd3-f86ec69c5582 | default | Default security group |
-+--------------------------------------+---------+------------------------+
+controller# openstack security group list -c ID -c Name
+(セキュリティグループ一覧を表示)
++--------------------------------------+---------+
+| ID                                   | Name    |
++--------------------------------------+---------+
+| 978dc272-58b0-4a7d-b232-30771e9fa7c2 | default |
++--------------------------------------+---------+
 
-controller# nova flavor-list
-+----+-----------+-----------+------+-----------+------+-------+-------------+-----------+
-| ID | Name      | Memory_MB | Disk | Ephemeral | Swap | VCPUs | RXTX_Factor | Is_Public |
-+----+-----------+-----------+------+-----------+------+-------+-------------+-----------+
-| 1  | m1.tiny   | 512       | 1    | 0         |      | 1     | 1.0         | True      |
-| 2  | m1.small  | 2048      | 20   | 0         |      | 1     | 1.0         | True      |
-| 3  | m1.medium | 4096      | 40   | 0         |      | 2     | 1.0         | True      |
-| 4  | m1.large  | 8192      | 80   | 0         |      | 4     | 1.0         | True      |
-| 5  | m1.xlarge | 16384     | 160  | 0         |      | 8     | 1.0         | True      |
-+----+-----------+-----------+------+-----------+------+-------+-------------+-----------+
+controller# # openstack flavor list -c Name -c Disk
+(フレーバー一覧を表示)
++-----------+------+
+| Name      | Disk |
++-----------+------+
+| m1.tiny   |    1 |
+| m1.small  |   20 |
+| m1.medium |   40 |
+| m1.large  |   80 |
+| m1.xlarge |  160 |
++-----------+------+
 ```
 
 nova bootコマンドを使って、インスタンスを起動します。正常に起動したらnova deleteコマンドでインスタンスを削除してください。
@@ -2785,7 +2780,6 @@ controller# watch nova list
 +--------------------------------------+------+--------+------------+-------------+----------------------+
 
 # grep "ERROR\|WARNING" /var/log/rabbitmq/*.log
-# grep "ERROR\|WARNING" /var/log/openvswitch/*
 # grep "ERROR\|WARNING" /var/log/neutron/*
 # grep "ERROR\|WARNING" /var/log/nova/*
 (各ノードの関連サービスでエラーが出ていないことを確認)
@@ -2799,11 +2793,9 @@ Request to delete server vm1 has been accepted.
 <!--11/13ここまで構築完了-->
 <!--11/13ここまで編集完了-->
 
-## 14. Cinderインストール（controllerノード）
+## 12. Cinderインストール（controllerノード）
 
-### 14-1 データベース作成・確認
-
-#### 14-1-1 データベース作成
+### 12-1 データベース作成
 
 MariaDBのデータベースにCinderのデータベースを作成します。
 
@@ -2818,12 +2810,12 @@ EOF
 Enter password: ← MariaDBのrootパスワードpasswordを入力
 ```
 
-#### 14-1-2 データベースの確認
+#### 12-2 データベースの確認
 
 MariaDBにCinderのデータベースが登録されたか確認します。
 
 ```
-controller# mysql -h sql -u cinder -p
+sql# mysql -u cinder -p
 Enter password: ← MariaDBのcinderパスワードpasswordを入力
 ...
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
@@ -2836,7 +2828,6 @@ MariaDB [(none)]> show databases;
 | cinder             |
 +--------------------+
 2 rows in set (0.00 sec)
-
 ```
 
 ※ユーザーcinderでログイン可能でデータベースの閲覧が可能なら問題ありません。
@@ -2844,7 +2835,7 @@ MariaDB [(none)]> show databases;
 <!-- BREAK -->
 
 
-### 14-2 認証情報の設定
+### 12-3 認証情報の設定
 
 以下コマンドで認証情報を設定します。
 
@@ -2860,27 +2851,20 @@ controller# source admin-openrc.sh
 controller# openstack user create --password-prompt cinder
 User Password: password  #cinderユーザーのパスワードを設定(本例はpasswordを設定)
 Repeat User Password: password
-+----------+----------------------------------+
-| Field    | Value                            |
-+----------+----------------------------------+
-| email    | None                             |
-| enabled  | True                             |
-| id       | f63d06a517eb484f919276bdba5b9567 |
-| name     | cinder                           |
-| username | cinder                           |
-+----------+----------------------------------+
++-----------+----------------------------------+
+| Field     | Value                            |
++-----------+----------------------------------+
+| domain_id | default                          |
+| enabled   | True                             |
+| id        | c5832de55fd6406f8faa6df5cb2c3bca |
+| name      | cinder                           |
++-----------+----------------------------------+
 ```
 
 + cinderユーザーをadminロールに追加
 
 ```
 controller# openstack role add --project service --user cinder admin
-+-------+----------------------------------+
-| Field | Value                            |
-+-------+----------------------------------+
-| id    | 9212e4ba1d07418a97fb4eaaaa275334 |
-| name  | admin                            |
-+-------+----------------------------------+
 ```
 
 <!-- BREAK -->
@@ -2894,7 +2878,7 @@ controller# openstack service create --name cinder \--description "OpenStack Bl
 +-------------+----------------------------------+
 | description | OpenStack Block Storage          |
 | enabled     | True                             |
-| id          | 546be85aaa664c71bc35add65c98a224 |
+| id          | b40b3624f21d40f786347cb706741fc1 |
 | name        | cinder                           |
 | type        | volume                           |
 +-------------+----------------------------------+
@@ -2905,7 +2889,7 @@ controller# openstack service create --name cinderv2 \--description "OpenStack 
 +-------------+----------------------------------+
 | description | OpenStack Block Storage          |
 | enabled     | True                             |
-| id          | 77ac9832fdcd485b928c118327027757 |
+| id          | ed76fc5250de43bd8cf428fbf1e9b9c6 |
 | name        | cinderv2                         |
 | type        | volumev2                         |
 +-------------+----------------------------------+
@@ -2916,39 +2900,27 @@ controller# openstack service create --name cinderv2 \--description "OpenStack 
 + Block StorageサービスのAPIエンドポイントを作成
 
 ```
-controller# openstack endpoint create \--publicurl http://controller:8776/v2/%\(tenant_id\)s \--internalurl http://controller:8776/v2/%\(tenant_id\)s \--adminurl http://controller:8776/v2/%\(tenant_id\)s \--region RegionOne volume
-+--------------+-----------------------------------------+
-| Field        | Value                                   |
-+--------------+-----------------------------------------+
-| adminurl     | http://controller:8776/v2/%(tenant_id)s |
-| id           | 29b1496fed5145bfb6fafc90c265010f        |
-| internalurl  | http://controller:8776/v2/%(tenant_id)s |
-| publicurl    | http://controller:8776/v2/%(tenant_id)s |
-| region       | RegionOne                               |
-| service_id   | 546be85aaa664c71bc35add65c98a224        |
-| service_name | cinder                                  |
-| service_type | volume                                  |
-+--------------+-----------------------------------------+
+controller# openstack endpoint create --region RegionOne \
+  volume public http://controller:8776/v1/%\(tenant_id\)s
+controller# openstack endpoint create --region RegionOne \
+  volume internal http://controller:8776/v1/%\(tenant_id\)s
+controller# openstack endpoint create --region RegionOne \
+  volume admin http://controller:8776/v1/%\(tenant_id\)s
+```
 
-controller# openstack endpoint create \--publicurl http://controller:8776/v2/%\(tenant_id\)s \--internalurl http://controller:8776/v2/%\(tenant_id\)s \--adminurl http://controller:8776/v2/%\(tenant_id\)s \--region RegionOne volumev2
-+--------------+-----------------------------------------+
-| Field        | Value                                   |
-+--------------+-----------------------------------------+
-| adminurl     | http://controller:8776/v2/%(tenant_id)s |
-| id           | 18777ee389dd4bfcbf5cc78920ce9f44        |
-| internalurl  | http://controller:8776/v2/%(tenant_id)s |
-| publicurl    | http://controller:8776/v2/%(tenant_id)s |
-| region       | RegionOne                               |
-| service_id   | 77ac9832fdcd485b928c118327027757        |
-| service_name | cinderv2                                |
-| service_type | volumev2                                |
-+--------------+-----------------------------------------+
+```  
+controller# openstack endpoint create --region RegionOne \
+  volumev2 public http://controller:8776/v2/%\(tenant_id\)s
+controller# openstack endpoint create --region RegionOne \
+  volumev2 internal http://controller:8776/v2/%\(tenant_id\)s
+controller# openstack endpoint create --region RegionOne \
+  volumev2 admin http://controller:8776/v2/%\(tenant_id\)s
 ```
 
 <!-- BREAK -->
 
 
-### 14-3 パッケージインストール
+### 12-4 パッケージインストール
 
 本書ではBlock StorageコントローラーとBlock Storageボリュームコンポーネントを一台のマシンで構築するため、両方の役割をインストールします。
 
@@ -2958,16 +2930,19 @@ controller# apt-get install -y lvm2 cinder-api cinder-scheduler cinder-volume py
 ```
 
 
-### 14-4 設定の変更
+### 12-5 Cinderの設定を変更
 
 ```
 controller# vi /etc/cinder/cinder.conf
 
 [DEFAULT]
 ...
-verbose = True            ← 確認
-auth_strategy = keystone  ← 確認
-rpc_backend = rabbit      ← 追記
+auth_strategy = keystone      ← 確認
+#lock_path = /var/lock/cinder ← コメントアウト
+
+↓↓ 以下追記 ↓↓
+
+rpc_backend = rabbit
 
 my_ip = 10.0.0.101   #controllerノード
 enabled_backends = lvm
@@ -2975,12 +2950,12 @@ glance_host = controller
 
 [oslo_messaging_rabbit]rabbit_host = controllerrabbit_userid = openstackrabbit_password = password
 
-[oslo_concurrency]lock_path = /var/lock/cinder
+[oslo_concurrency]lock_path = /var/lib/cinder/tmp
 
 [database]
-connection = mysql://cinder:password@sql/cinder
+connection = mysql+pymysql://cinder:password@sql/cinder
 
-[keystone_authtoken]auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = cinderpassword = password       ← cinderユーザーのパスワード(13-2で設定したもの)
+[keystone_authtoken]auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = cinderpassword = password       ← cinderユーザーのパスワード(12-2で設定したもの)
 
 [lvm]volume_driver = cinder.volume.drivers.lvm.LVMVolumeDrivervolume_group = cinder-volumesiscsi_protocol = iscsiiscsi_helper = tgtadm
 ```
@@ -2991,14 +2966,15 @@ connection = mysql://cinder:password@sql/cinder
 controller# less /etc/cinder/cinder.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
+<!-- BREAK -->
 
-### 14-5 データベースに表を作成
+### 12-6 データベースに表を作成
 
 ```
 controller# su -s /bin/sh -c "cinder-manage db sync" cinder
 ```
 
-### 14-6 Cinderサービスの再起動
+### 12-7 Cinderサービスの再起動
 
 設定を反映させるために、Cinderのサービスを再起動します。
 
@@ -3006,7 +2982,7 @@ controller# su -s /bin/sh -c "cinder-manage db sync" cinder
 controller# service cinder-scheduler restart && service cinder-api restart
 ```
 
-### 14-7 使用しないデータベースファイル削除
+### 12-8 使用しないデータベースファイルを削除
 
 ```
 controller# rm /var/lib/cinder/cinder.sqlite
@@ -3014,17 +2990,23 @@ controller# rm /var/lib/cinder/cinder.sqlite
 
 <!-- BREAK -->
 
-### 14-8 イメージ格納用ボリューム作成
+### 12-9 イメージ格納用ボリュームの作成
 
-イメージ格納用ボリュームを設定するために物理ボリュームの設定、ボリューム作成を行います。
+イメージ格納用ボリュームを設定するために物理ボリュームの設定、ボリュームの作成を行います。
 
-#### 14-8-1 物理ボリュームを追加
+#### 12-9-1 物理ボリュームを追加
 
-本例ではcontrollerノードにハードディスクを追加して、そのボリュームをCinder用ボリュームとして使います。controllerノードを一旦シャットダウンしてからハードディスクを増設し、再起動してください。新しい増設したディスクはdmesgコマンドやfdisk -lコマンドなどを使って確認できます。
+本例ではcontrollerノードにハードディスクを追加して、そのボリュームをCinder用ボリュームとして使います。controllerノードを一旦シャットダウンしてからハードディスクを増設し、再起動してください。新しい増設したディスクはdmesgコマンドなどを使って確認できます。
+
+```
+controller# # dmesg |grep sd|grep "logical blocks"
+[    1.361779] sd 2:0:0:0: [sda] 62914560 512-byte logical blocks: (32.2 GB/30.0 GiB)  ← システムディスク
+[    1.362105] sd 2:0:1:0: [sdb] 33554432 512-byte logical blocks: (17.1 GB/16.0 GiB)  ← 追加ディスク
+```
 
 仮想マシンにハードディスクを増設した場合は/dev/vdbなどのようにデバイス名が異なる場合があります。
 
-#### 14-8-2 物理ボリュームを設定
+#### 12-9-2 物理ボリュームを設定
 
 以下コマンドで物理ボリュームを作成します。
 
@@ -3042,7 +3024,16 @@ controller# vgcreate cinder-volumes /dev/sdb
   Volume group "cinder-volumes" successfully created
 ```
 
-#### 14-8-3 Cinder-Volumeサービスの再起動
++ /etc/lvm/lvm.confにデバイスを指定
+
+```
+devices {
+...
+filter = [ "a/sdb/", "r/.*/"]
+```
+
+
+#### 12-9-3 Cinder-Volumeサービスの再起動
 
 Cinderストレージの設定を反映させるために、Cinder-Volumeのサービスを再起動します。
 
@@ -3050,15 +3041,9 @@ Cinderストレージの設定を反映させるために、Cinder-Volumeのサ�
 controller# service cinder-volume restart && service tgt restart
 ```
 
-#### 14-8-4 admin環境変数設定ファイル読み込み
+#### 12-9-4 admin環境変数設定ファイルを読み込み
 
-Block StorageクライアントでAPI 2.0でアクセスするように環境変数設定ファイルを書き換えます。
-
-```
-controller# echo "export OS_VOLUME_API_VERSION=2" | tee -a admin-openrc.sh demoopenrc.sh
-```
-
-インスタンス格納用ボリュームを作成するために、admin環境変数を読み込みます。
+adminのみ実行可能なコマンドを実行するために、admin環境変数を読み込みます。
 
 ```
 controller# source admin-openrc.sh
@@ -3066,69 +3051,44 @@ controller# source admin-openrc.sh
 
 <!-- BREAK -->
 
-#### 14-8-5 ボリューム作成
+#### 12-9-5 Cinderサービスの確認
 
-以下コマンドでインスタンス格納用ボリュームを作成します。
+以下コマンドでCinderサービスの一覧を表示し、正常に動作していることを確認します。
 
 
 ```
-controller# cinder create --display-name testvolume01 1
-+---------------------------------------+--------------------------------------+
-|                Property               |                Value                 |
-+---------------------------------------+--------------------------------------+
-|              attachments              |                  []                  |
-|           availability_zone           |                 nova                 |
-|                bootable               |                false                 |
-|          consistencygroup_id          |                 None                 |
-|               created_at              |      2015-06-25T08:41:05.000000      |
-|              description              |                 None                 |
-|               encrypted               |                False                 |
-|                   id                  | 776ed580-780e-431b-8d5a-f4d883b98884 |
-|                metadata               |                  {}                  |
-|              multiattach              |                False                 |
-|                  name                 |             testvolume01             |
-|         os-vol-host-attr:host         |                 None                 |
-|     os-vol-mig-status-attr:migstat    |                 None                 |
-|     os-vol-mig-status-attr:name_id    |                 None                 |
-|      os-vol-tenant-attr:tenant_id     |   218010a87fe5477bba7f5e25c8211614   |
-|   os-volume-replication:driver_data   |                 None                 |
-| os-volume-replication:extended_status |                 None                 |
-|           replication_status          |               disabled               |
-|                  size                 |                  1                   |
-|              snapshot_id              |                 None                 |
-|              source_volid             |                 None                 |
-|                 status                |               creating               |
-|                user_id                |   9caffb5dc1d749c5b3e9493139fe8598   |
-|              volume_type              |                 None                 |
-+---------------------------------------+--------------------------------------+
+controller# cinder service-list
++------------------+--------------------+------+---------+-------+----------------------------+-----------------+
+|      Binary      |        Host        | Zone |  Status | State |         Updated_at         | Disabled Reason |
++------------------+--------------------+------+---------+-------+----------------------------+-----------------+
+| cinder-scheduler |   lib-controller   | nova | enabled |   up  | 2015-11-13T09:25:51.000000 |        -        |
+|  cinder-volume   | lib-controller@lvm | nova | enabled |   up  | 2015-11-13T09:25:51.000000 |        -        |
++------------------+--------------------+------+---------+-------+----------------------------+-----------------+
 ```
 
+#### 12-9-6 Cinderボリュームの作成を試行
 
-#### 14-8-6 作成ボリュームの確認
-
-以下コマンドで作成したボリュームを確認します。
+以下コマンドでCinderボリュームを作成し、正常にCinderが動作していることを確認します。
 
 ```
-controller# cinder list
-+--------------------------------------+-----------+--------------+------+-------------+----------+-------------+
-|                  ID                  |   Status  |     Name     | Size | Volume Type | Bootable | Attached to |
-+--------------------------------------+-----------+--------------+------+-------------+----------+-------------+
-| 776ed580-780e-431b-8d5a-f4d883b98884 | available | testvolume01 |  1   |     None    |  false   |             |
-+--------------------------------------+-----------+--------------+------+-------------+----------+-------------+
-
-controller# cinder delete testvolume01
-(作成したテストボリュームの削除)
+controller# openstack volume create --size 1 volume
+(1GBのストレージを作成)
+controller# openstack volume list -c "Display Name" -c "Size"
++--------------+------+
+| Display Name | Size |
++--------------+------+
+| volume       |    1 |
++--------------+------+
 ```
-
-※一覧にコマンドを実行して登録したボリュームが表示されて、ステータスがavailableとなっていれば問題ありません。
 
 <!-- BREAK -->
 
-## 15. Dashboardインストール・確認（controllerノード）
+
+## 13. Dashboardインストール・確認（コントローラーノード）
 
 クライアントマシンからブラウザーでOpenStack環境を操作可能なWebインターフェイスをインストールします。
 
-### 15-1 パッケージインストール
+### 13-1 パッケージインストール
 
 controllerノードにDashboardをインストールします。
 
@@ -3137,7 +3097,7 @@ controller# apt-get update
 controller# apt-get install -y openstack-dashboard
 ```
 
-### 15-2 Dashboardの設定の変更
+### 13-2 Dashboardの設定を変更
 
 インストールしたDashboardの設定を変更します。
 
@@ -3151,7 +3111,6 @@ ALLOWED_HOSTS = '*'              ← 確認
 CACHES = {                       ← 確認'default': {'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache','LOCATION': '127.0.0.1:11211',   }}
 
 OPENSTACK_KEYSTONE_DEFAULT_ROLE = "user"  ← 変更
-TIME_ZONE = "Asia/Tokyo"
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
@@ -3173,13 +3132,13 @@ controller# vi /var/www/html/index.html
 変更した変更を反映させるため、Apacheとセッションストレージサービスを再起動します。
 
 ```
-controller# service apache2 restart
+controller# service apache2 reload
 ```
 
 <!-- BREAK -->
 
 
-### 15-3 Dashboardへのアクセス確認
+### 13-3 Dashboardにアクセス
 
 controllerノードとネットワーク的に接続されているマシンからブラウザで以下URLに接続してOpenStackのログイン画面が表示されるか確認します。
 
@@ -3194,11 +3153,11 @@ http://controller/horizon/
 
 <!-- BREAK -->
 
-### 15-4 セキュリティグループの設定
+### 13-4 セキュリティグループの設定
 
 OpenStackの上で動かすインスタンスのファイアウォール設定は、セキュリティグループで行います。ログイン後、次の手順でセキュリティグループを設定できます。
 
-1.対象のユーザーでログイン<br>
+1.demoユーザーでログイン<br>
 2.「プロジェクト→コンピュート→アクセスとセキュリティ」を選択<br>
 3.「ルールの管理」ボタンをクリック<br>
 4.「ルールの追加」で許可するルールを定義<br>
@@ -3206,11 +3165,11 @@ OpenStackの上で動かすインスタンスのファイアウォール設定�
 
 セキュリティーグループは複数作成できます。作成したセキュリティーグループをインスタンスを起動する際に選択することで、セキュリティグループで定義したポートを解放したり、拒否したり、接続できるクライアントを制限することができます。
 
-### 15-5 キーペアの作成
+### 13-5 キーペアの作成
 
 OpenStackではインスタンスへのアクセスはデフォルトで公開鍵認証方式で行います。次の手順でキーペアを作成できます。
 
-1.対象のユーザーでログイン<br>
+1.demoユーザーでログイン<br>
 2.「プロジェクト→コンピュート→アクセスとセキュリティ」をクリック<br>
 3.「キーペア」タブをクリック<br>
 4.「キーペアの作成」ボタンをクリック<br>
@@ -3226,11 +3185,11 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 
 <!-- BREAK -->
 
-### 15-6 インスタンスの起動
+### 13-6 インスタンスの起動
 
 前の手順でGlanceにCirrOSイメージを登録していますので、早速構築したOpenStack環境上でインスタンスを起動してみましょう。
 
-1.対象のユーザーでログイン<br>
+1.demoユーザーでログイン<br>
 2.「プロジェクト→コンピュート→イメージ」をクリック<br>
 3.イメージ一覧から起動するOSイメージを選び、「インスタンスの起動」ボタンをクリック<br>
 4.「インスタンスの起動」詳細タブで起動するインスタンス名、フレーバー、インスタンス数を設定<br>
@@ -3240,11 +3199,11 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 8.高度な設定タブでパーティションなどの構成を設定（オプション）<br>
 9.右下の「起動」ボタンをクリック<br>
 
-### 15-7 Floating IPの設定
+### 13-7 Floating IPの設定
 
 起動したインスタンスにFloating IPアドレスを設定することで、Dashboardのコンソール以外からインスタンスにアクセスできるようになります。インスタンスにFloating IPを割り当てるには次の手順で行います。
 
-1.対象のユーザーでログイン<br>
+1.demoユーザーでログイン<br>
 2.「プロジェクト→コンピュート→インスタンス」をクリック<br>
 3.インスタンスの一覧から割り当てるインスタンスをクリック<br>
 4.アクションメニューから「Floating IPの割り当て」をクリック<br>
@@ -3254,7 +3213,7 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 
 <!-- BREAK -->
 
-### 15-8 インスタンスへのアクセス
+### 13-8 インスタンスへのアクセス
 
 Floating IPを割り当てて、かつセキュリティグループの設定を適切に行っていれば、リモートアクセスできるようになります。セキュリティーグループでSSHを許可した場合、端末からSSH接続が可能になります（下記は実行例）。
 
@@ -3266,538 +3225,7 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 
 #Part.2 監視環境 構築編
 <br>
-構築したOpenStack環境をZabbixとHatoholで監視しましょう。
-
-ZabbixはZabbix SIA社が開発・提供・サポートする、オープンソースの監視ソリューションです。
-HatoholはProject Hatoholが開発・提供する、システム監視やジョブ管理やインシデント管理、ログ管理など、様々な運用管理ツールのハブとなるツールです。HatoholはZabbixやNagios、OpenStack Ceilometerに対応しており、これらのツールから情報を収集して性能情報、障害情報、ログなどを一括管理することができます。Hatoholのエンタープライズサポートはミラクル・リナックス株式会社が提供しています。
-
-本編ではOpenStack環境を監視するためにZabbixとHatoholを構築するまでの流れを説明します。
+準備中。。
 
 <!-- BREAK -->
 
-## 16. Zabbixのインストール
-
-ZabbixはZabbix SIA社が提供するパッケージを使う方法とCanonical Ubuntuが提供するパッケージを使う方法がありますが、今回は新たなリポジトリー追加が不要なUbuntuが提供する標準パッケージを使って、Zabbixが動作する環境を作っていきましょう。
-
-なお、UbuntuのZabbix関連のパッケージはuniverseリポジトリーで管理されています。universeリポジトリーを参照するように/etc/apt/sources.listを設定する必要があります。
-次のように実行して同じような結果が出力されれば、universeリポジトリーが参照できるように設定されていると判断できます。
-
-```
-# apt-cache policy zabbix-server-mysql
-zabbix-server-mysql:
-  Installed: (none)
-  Candidate: 1:2.2.2+dfsg-1ubuntu1
-  Version table:
-     1:2.2.2+dfsg-1ubuntu1 0
-        500 http://us.archive.ubuntu.com/ubuntu/ trusty/universe amd64 Packages
-```
-
-本例ではZabbixをUbuntu Server 14.04.2上にオールインワン構成でセットアップする手順を示します。
-
-### 16-1 パッケージのインストール
-次のコマンドを実行し、ZabbixおよびZabbixの稼働に必要となるパッケージ群をインストールします。
-
-```
-zabbix# apt-get install -y php5-mysql zabbix-agent zabbix-server-mysql \
- zabbix-java-gateway zabbix-frontend-php
-```
-
-インストール中にMySQLのパスワードを設定する必要があります。
-
-### 16-2 Zabbix用データベースの作成
-
-#### 16-2-1 データベースの作成
-
-次のコマンドを実行し、Zabbix用MySQLユーザおよびデータベースを作成します。
-
-```
-zabbix# mysql -u root -p << EOF
-CREATE DATABASE zabbix CHARACTER SET UTF8;
-GRANT ALL PRIVILEGES ON zabbix.* TO 'zabbix'@'localhost' \
-  IDENTIFIED BY 'zabbix';
-EOF
-Enter password: ← MySQLのrootパスワードを入力(16-1で設定したもの)
-```
-
-次のコマンドを実行し、Zabbix用データベースにテーブル等のデータベースオブジェクトを作成します。
-
-```
-zabbix# cd /usr/share/zabbix-server-mysql/
-zabbix# zcat schema.sql.gz | mysql zabbix -uzabbix -pzabbix
-zabbix# zcat images.sql.gz | mysql zabbix -uzabbix -pzabbix
-zabbix# zcat data.sql.gz | mysql zabbix -uzabbix -pzabbix
-```
-
-#### 16-2-2 データベースの確認
-
-作成したデータベーステーブルにアクセスしてみましょう。zabbixデータベースに様々なテーブルがあり、参照できれば問題ありません。
-
-```
-zabbix# mysql -u root -p
-Enter password:         ← パスワードzabbixを入力
-mysql> show databases;
-+--------------------+
-| Database           |
-+--------------------+
-| information_schema |
-| zabbix             |
-+--------------------+
-2 rows in set (0.00 sec)
-mysql> use zabbix;
-mysql> show tables;
-+-----------------------+
-| Tables_in_zabbix      |
-+-----------------------+
-| acknowledges          |
-| actions               |
-| alerts                |
-...
-
-mysql> describe acknowledges;
-+---------------+---------------------+------+-----+---------+-------+
-| Field         | Type                | Null | Key | Default | Extra |
-+---------------+---------------------+------+-----+---------+-------+
-| acknowledgeid | bigint(20) unsigned | NO   | PRI | NULL    |       |
-| userid        | bigint(20) unsigned | NO   | MUL | NULL    |       |
-| eventid       | bigint(20) unsigned | NO   | MUL | NULL    |       |
-| clock         | int(11)             | NO   | MUL | 0       |       |
-| message       | varchar(255)        | NO   |     |         |       |
-+---------------+---------------------+------+-----+---------+-------+
-5 rows in set (0.01 sec)
-```
-
-<!-- BREAK -->
-
-### 16-3 Zabbixサーバーの設定および起動
-/etc/zabbix/zabbix_server.confを編集し、次の行を追加します。なお、MySQLユーザzabbixのパスワードを別の文字列に変更した場合は、該当文字列を指定する必要があります。
-
-```
-zabbix# vi /etc/zabbix/zabbix_server.conf
-...
-DBPassword=zabbix
-```
-
-/etc/default/zabbix-serverを編集し、起動可能にします。
-
-```
-zabbix# vi /etc/default/zabbix-server
-...
-# Instructions on how to set up the database can be found in
-# /usr/share/doc/zabbix-server-mysql/README.Debian
-START=yes                     ← noからyesに変更
-```
-
-以上の操作を行ったのち、サービスzabbix-serverを起動します。
-
-```
-zabbix# service zabbix-server restart
-```
-
-<!-- BREAK -->
-
-### 16-4 Zabbix frontendの設定および起動
-PHPの設定をZabbixが動作するように修正するため、/etc/php5/apache2/php.iniを編集します。
- 
- ```
- zabbix# vi /etc/php5/apache2/php.ini
-
- [PHP]
- ...
- post_max_size = 16M          ← 変更
- max_execution_time = 300     ← 変更
- max_input_time = 300         ← 変更
- 
- [Date]
- date.timezone = Asia/Tokyo   ← 変更
- ```
-
-Zabbix frontendへアクセスできるよう、設定ファイルをコピーします。
-
-```
-zabbix# cp -p /usr/share/doc/zabbix-frontend-php/examples/apache.conf /etc/apache2/conf-enabled/zabbix.conf
-```
-
-これまでの設定変更を反映させるため、サービスApache2をリロードします。
-
-```
-zabbix# service apache2 reload
-```
-
-次に、Zabbix frontendの接続設定を行います。次のコマンドを実行し、一時的に権限を変更します。
-
-```
-zabbix# chmod 775 /etc/zabbix
-zabbix# chgrp www-data /etc/zabbix
-```
-
-WebブラウザでZabbix frontendへアクセスします。画面指示に従い、Zabbixの初期設定を行います。
-
-```
-http://<Zabbix frontendのIPアドレス>/zabbix/
-```
-
-次のような画面が表示されます。「Next」ボタンをクリックして次に進みます。
-
-![Zabbix初期セットアップ](./images/zabbix-setup.png)
-
-- 「2. Check of pre-requisites」は、システム要件を満たしている（全てOKとなっている）ことを確認します。
-- 「3. Configure DB connection」は次のように入力し、「Test connection」ボタンを押してOKとなることを確認します。
-
-項目          | 設定値
-------------- | -------------------------------
-Database type | MySQL
-Database host | localhost
-Database Port | 0
-Database name | zabbix
-User          | zabbix
-Password      | zabbix
-
-- 「4. Zabbix server details」はZabbix Serverのインストール場所の指定です。本例ではそのまま次に進みます。
-- 「5. Pre-Installation summary」で設定を確認し、問題なければ次に進みます。
-- 「6. Install」で設定ファイルのパスが表示されるので確認し「Finish」ボタンをクリックします（/etc/zabbix/zabbix.conf.php）。
-- ログイン画面が表示されるので、Admin/zabbix（初期パスワード）でログインします。
-
-Zabbixの初期セットアップ終了後にログイン画面が表示されますので、実際に運用開始する前に次のコマンドを実行して権限を元に戻します。
-
-```
-zabbix# chmod 755 /etc/zabbix
-zabbix# chgrp root /etc/zabbix
-```
-
-<!-- BREAK -->
-
-## 17. Hatoholのインストール
-
-HatoholはCentOS6.5以降、Ubuntu Server 12.04および14.04などで動作します。
-CentOS6.5以降および7.x向けには導入に便利なRPMパッケージが公式で提供されています。
-
-本例ではHatoholをCentOS 7上にオールインワン構成でセットアップする手順を示します。
-
-![Hatoholダッシュボード](./images/hatohol2.png)
-
-### 17-1 インストール
-
-　1. Hatoholをインストールするために、Project Hatohol公式のYUMリポジトリーを登録します。
-
-```
-hatohol# wget -P /etc/yum.repos.d/ http://project-hatohol.github.io/repo/hatohol-el7.repo
-```
-
-　2. EPELリポジトリー上のパッケージインストールをサポートするため、EPELパッケージを追加インストールします。
-
-```
-hatohol# yum install -y epel-release
-hatohol# yum update
-```
-
-　3. Hatoholサーバをインストールします。
-
-```
-hatohol# yum -y install hatohol-server
-```
-
-　4. Hatohol Web Frontendをインストールします。
-
-```
-hatohol# yum install -y hatohol-web
-```
-
-　5. 必要となる追加パッケージをインストールします。
-
-```
-hatohol# yum install -y mariadb-server qpid-cpp-server
-```
-
-
-### 17-2 セットアップ
-
-　1. /etc/my.cnfの編集
-
- * 編集前
-
-```
-!includedir /etc/my.cnf.d
-```
-
- * 編集後
-
-```
-includedir /etc/my.cnf.d
-```
-
-<!-- BREAK -->
-
-　2. /etc/my.cnf.d/server.cnfの編集  
-
-セクション[mysqld]に、少なくとも次のパラメータを追記します。
-
-```
-[mysqld]
-character-set-server = utf8
-skip-character-set-client-handshake
-default-storage-engine = innodb
-innodb_file_per_table
-```
-
-　3. MariaDBサービスの自動起動の有効化と起動
-
-```
-hatohol# systemctl enable mariadb.service
-hatohol# systemctl start mariadb.service
-```
-
-　4. MariaDBユーザrootのパスワード変更
-
-```
-hatohol# mysqladmin password
-```
-
-　5. Hatohol DBの初期化
-
-```
-hatohol# hatohol-db-initiator --db_user root --db_password <4で設定したrootパスワード>
-...
-Succeessfully loaded: /usr/bin/../share/hatohol/sql/init-user.sql
-Succeessfully loaded: /usr/bin/../share/hatohol/sql/server-type-zabbix.sql
-Succeessfully loaded: /usr/bin/../share/hatohol/sql/server-type-nagios.sql
-Succeessfully loaded: /usr/bin/../share/hatohol/sql/server-type-hapi-zabbix.sql
-Succeessfully loaded: /usr/bin/../share/hatohol/sql/server-type-hapi-json.sql
-Succeessfully loaded: /usr/bin/../share/hatohol/sql/server-type-ceilometer.sql
-```
-
-初期状態で上記コマンドを実行した場合、MySQLユーザhatohol、データベースhatoholが作成されます。これらを変更する場合、事前に/etc/hatohol/hatohol.confを編集してください。
-
-　6. Hatohol Web用DBの作成
-
-```
-hatohol# mysql -u root -p << EOF
-CREATE DATABASE hatohol_client;
-GRANT ALL PRIVILEGES ON hatohol_client.* TO 'hatohol'@'localhost' \
-  IDENTIFIED BY 'hatohol';
-EOF
-```
-
-　7. Hatohol Web用DBへのテーブル追加
-
-```
-hatohol# /usr/libexec/hatohol/client/manage.py syncdb
-```
-
-　8. Hatoholサーバーの自動起動の有効化と起動
-
-```
-hatohol# systemctl enable hatohol.service
-hatohol# systemctl start hatohol.service
-```
-
-　9. Hatohol Webの自動起動の有効化と起動
-
-```
-hatohol# systemctl enable httpd.service
-hatohol# systemctl start httpd.service
-```
-
-　10. HatoholおよびApache Webサーバーの動作確認
-
-```
-hatohol# systemctl status -l hatohol.service
-hatohol# systemctl status -l httpd.service
-```
-
-<!-- BREAK -->
-
-### 17-3 セキュリティ設定の変更
-
-CentOSインストール後の初期状態では、SElinux, Firewalld, iptablesといったセキュリティ機構により他のコンピュータからのアクセスに制限が加えられます。Hatoholを使用するにあたり、これらを適切に解除する必要があります。
-
-　1. SELinuxの設定  
-
-```
-hatohol# getenforce
-Enforcing
-```
-
-Enforcingの場合、次のコマンドでSElinuxポリシールールの強制適用を解除できます。
-
-```
-hatohol# setenforce 0
-hatohol# getenforce
-Permissive
-```
-
-恒久的にSELinuxポリシールールの適用を無効化するには、/etc/selinux/configを編集します。
-
- * 編集前
-
- ```
- SELINUX=enforcing
- ```
-
- * 編集後
-
- ```
- SELINUX=permissive
- ```
- 
- 完全にSELinuxを無効化するには、次のように設定します。
-
- ```
- SELINUX=disabled
- ```
- 
- 
- ```
- 筆者注:
- SELinuxはできる限り無効化すべきではありません。
- ```
-
-　2. パケットフィルタリングの設定
-フィルタリングの設定変更は、次のコマンドで恒久的に変更可能です。
-
-```
-hatohol# firewall-cmd --add-service=http --zone=public
-hatohol# iptables-save > /etc/sysconfig/iptables
-```
-
-<!-- BREAK -->
-
-### 17-4 Hatoholによる情報の閲覧
-
-Hatohol Webが動作しているホストのトップディレクトリーをWebブラウザで表示してください。10.0.0.10で動作している場合は、次のURLとなります。admin/hatohol（初期パスワード）でログインできます。
-
-```
-http://10.0.0.10/
-```
-
-Hatoholは監視サーバーから取得したログ、イベント、性能情報を表示するだけでなく、それらの情報を統計してグラフとして出力することができる機能が備わっています。CPUのシステム時間、ユーザー時間をグラフとして出力すると次のようになります。
-
-![Hatoholのグラフ機能](./images/hatohol3.png)
-
-<!-- BREAK -->
-
-### 17-5 HatoholにZabbixサーバーを登録
-
-Hatoholをインストールできたら、Zabbixサーバーの情報を追加します。Hatohol Webにログインしたら、上部のメニューバーの「設定→監視サーバー」をクリックします。「監視サーバー」の画面に切り替わったら「監視サーバー追加」ボタンをクリックしてノードを登録します。
-
-項目               | 設定値
------------------- | -------------------------------
-監視サーバータイプ | Zabbix
-ニックネーム       | zabbix1
-ホスト名           | zabbix
-IPアドレス         | (ZabbixサーバーのIPアドレス)
-ポート番号         | 80
-ユーザー           | Admin
-パスワード         | zabbix
-
-ページを再読み込みして、通信状態が「初期状態」から「正常」になる事を確認します。
-
-![Zabbixサーバーの追加](./images/hatohol1.png)
-
-<!-- BREAK -->
-
-### 17-6 HatoholでZabbixサーバーの監視
-
-インストール直後のZabbixサーバーはモニタリング設定が無効化されています。これを有効化するとZabbixサーバー自身の監視データを取得する事ができるようになり、Hatoholで閲覧できるようになります。
-
-Zabbixサーバーのモニタリング設定を変更するには、次の手順で行います。
-
-+ Zabbixのメインメニュー「Configuration → Host groups」をクリックします。
-+ Host groups一覧から「Zabbix server」をクリックします。
-+ 「Zabbix server」のHostの設定で、Statusを「Monitored」に変更します。
-+ 「Save」ボタンをクリックして設定変更を適用します。
-
-以上の手順で、Zabbixサーバーを監視対象として設定できます。
-
-### 17-7 Hatoholでその他のホストの監視
-
-ZabbixとHatoholの連携ができたので、あとは対象のサーバーにZabbix Agentをインストールし、手動でZabbixサーバーにホストを追加するか、ディスカバリ自動登録を使って、特定のネットワークセグメントに所属するZabbix Agentがインストールされたホストを自動登録するようにセットアップするなどの方法で監視ノードを追加できます。
-追加したノードはZabbixおよびHatoholで監視する事ができます。
-
-#### 17-7-1 Zabbix Agentのインストール
-
-ZabbixでOpenStackのcontrollerノード、networkノード、computeノードを監視するためにZabbix Agentをインストールします。Ubuntuには標準でZabbix Agentパッケージが用意されているので、apt-getコマンドなどを使ってインストールします。
-
-```
-# apt-get update && apt-get install -y zabbix-agent
-```
-
-#### 17-7-2 Zabbix Agentの設定
-
-Zabbix Agentをインストールしたら次にどのZabbixサーバーと通信するのか設定を行う必要があります。最低限必要な設定は次の3つです。次のように設定します。
-
-(controllerノードの設定記述例)
-
-```
-# vi /etc/zabbix/zabbix_agentd.conf
-...
-Server          10.0.0.10     ← ZAbbixサーバーのIPアドレスに書き換え
-ServerActive    10.0.0.10     ← ZAbbixサーバーのIPアドレスに書き換え
-Hostname  controller      ← ZAbbixサーバーに登録する際のホスト名と同一のものを設定
-ListenIP  10.0.0.101      ← Zabbixエージェントが待ち受ける側のIPアドレス
-```
-
-ListenIPに指定するのはZabbixサーバーと通信できるNICに設定したIPアドレスを設定します。
-
-<!-- BREAK -->
-
-変更したZabbix Agentの設定を反映させるため、Zabbix Agentサービスを再起動します。
-
-```
-# service zabbix-agent restart
-```
-
-#### 17-7-3 ホストの登録
-
-Zabbix Agentのセットアップが終わったら、次にZabbix AgentをセットアップしたサーバーをZabbixの管理対象として追加します。次のように設定します。
-
-- 「Configuration → Host」をクリックします。初期設定時はZabbix serverのみが登録されていると思います。同じように監視対象サーバーをZabbixに登録します。
-
-- 「Hosts」画面の右上にある、「Create Host」ボタンをクリックします。
-- 次のように設定します。
-
-「Host」の設定    | 説明
------------------ | ----------------
-Host name         | zabbix_agentd.confにそれぞれ記述したHostnameを記述
-Visible name      | 表示名（オプション）
-Groups            | 所属グループの指定。例としてLinux serversを指定
-Agent interfaces  | 監視対象とするAgentがインストールされたホストのIPアドレス（もしくはホスト名）
-Status            | Monitored
-
-その他の項目は適宜設定します。
-
-- 「CONFIGURATION OF HOSTS」の「Templates」タブをクリックして設定を切り替えます。
-- 「Link new templates」の検索ボックスに「Template OS Linux」と入力し、選択肢が出てきたらクリックします。そのほかのテンプレートを割り当てるにはテンプレートを検索し、該当のものを選択します。
-- 「Link new templates」にテンプレートを追加したら、その項目の「Add」リンクをクリックします。「Linked templates」に追加されます。
-- 「Save」ボタンをクリックします。
-- 「Hosts」画面にサーバーが追加されます。ページの再読み込みを実行して、Zabbixエージェントが有効になっていることを確認してください。「Z」アイコンが緑色になればOKです。
-
-![Zabbixエージェントステータスを確認](./images/zabbix-agent.png)
-
-- ほかに追加したいサーバーがあれば「Zabbix Agentのインストール、設定、ホストの登録」の一連の流れを繰り返します。監視したい対象が大量にある場合はオートディスカバリを検討してください。
-
-<!-- BREAK -->
-
-#### 17-7-4 Hatoholで確認
-
-登録したサーバーの情報がHatoholで閲覧できるか確認してみましょう。Zabbixサーバー以外のログなど表示できるようになればOKです。
-
-![OpenStackノードの監視](./images/hatohol-view.png)
-
-
-#### 17-7-5 参考情報
-
-ホストの追加やディスカバリ自動登録については次のドキュメントをご覧ください。
-
-- <https://www.zabbix.com/documentation/2.2/jp/manual/quickstart/host>
-- <https://www.zabbix.com/documentation/2.2/jp/manual/discovery/auto_registration>
-- <http://www.zabbix.com/jp/auto_discovery.php>
-- <https://www.zabbix.com/documentation/2.2/jp/manual/discovery/network_discovery/rule>
-
-<!-- BREAK -->
-
-### 17-8 Hatohol Arm Plugin Interfaceを使用する場合の操作
-Hatohol Arm Plugin Interface(HAPI)を使用する場合、/etc/qpid/qpidd.confに次の行を追記します。なお、=の前後にスペースを入れてはなりません。
-
-```
-auth=no
-```
