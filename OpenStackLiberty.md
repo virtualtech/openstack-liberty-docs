@@ -188,7 +188,7 @@ Ubuntu Serverで日本語の言語を設定した場合、標準出力や標準�
 ```
 
 
-#### 1-6-3 プロキシーの設定
+#### 1-6-2 プロキシーの設定
 
 外部ネットワークとの接続にプロキシーの設定が必要な場合は、aptコマンドを使ってパッケージの照会やダウンロードを行うために次のような設定をする必要があります。
 
@@ -304,7 +304,7 @@ iface eth1 inet static
       netmask 255.255.255.0
 ```
 
-#### 2-1-4 コンピュートノードのIPアドレスの設定
+#### 2-1-3 コンピュートノードのIPアドレスの設定
 
 ```
 compute1# vi /etc/network/interfaces
@@ -325,7 +325,7 @@ auto eth1
 <!-- BREAK -->
 
 
-#### 2-1-5 ネットワークの設定を反映
+#### 2-1-4 ネットワークの設定を反映
 
 各ノードで変更した設定を反映させるため、ホストを再起動します。
 
@@ -516,7 +516,7 @@ sql# apt-get install -y mariadb-server
 本例ではパスワードとして「password」を設定します。
 
 
-#### 3-1-2 MariaDB設定の変更
+#### 3-1-2 MariaDBの設定を変更
 
 MariaDBの設定ファイルmy.cnfを開き以下の設定を変更します。
 
@@ -625,7 +625,7 @@ SQLノード以外のノードに、インストール済みのMariaDBと同様�
 # apt-get install -y mariadb-client-5.5 mariadb-client-core-5.5
 ````
 
-#### 3-1-6 mytopのインストール
+### 3-2 mytopのインストール
 
 データベースの状態を確認するため、データベースパフォーマンスモニターツールのmytopをインストールします。
 
@@ -746,7 +746,7 @@ http://controller-node-ipaddress:15672
 
 ### 4-2 環境変数設定ファイルの作成
 
-#### 4-2-1 admin環境変数設定ファイル作成
+#### 4-2-1 admin環境変数設定ファイルの作成
 
 adminユーザー用環境変数設定ファイルを作成します。
 
@@ -764,7 +764,7 @@ export OS_IDENTITY_API_VERSION=3
 export PS1='\u@\h \W(admin)\$ '
 ```
 
-#### 4-2-2 demo環境変数設定ファイル作成
+#### 4-2-2 demo環境変数設定ファイルの作成
 
 demoユーザー用環境変数設定ファイルを作成します。
 
@@ -788,12 +788,9 @@ export PS1='\u@\h \W(demo)\$ '
 
 各サービス間の連携時に使用する認証サービスKeystoneのインストールと設定を行います。
 
-### 5-1 データベースの作成・確認
+### 5-1 データベースの作成
 
 Keystoneで使用するデータベースを作成します。
-
-#### 5-1-1 データベースの作成
-
 SQLサーバー上でMariaDBにデータベースkeystoneを作成します。
 
 ```
@@ -809,7 +806,7 @@ Enter password: ← MariaDBのrootパスワードpasswordを入力
 
 <!-- BREAK -->
 
-#### 5-1-2 データベースの確認
+### 5-2 データベースの確認
 
 SQLノードにユーザーkeystoneでログインしデータベースの閲覧が可能であることを確認します。
 
@@ -829,7 +826,7 @@ MariaDB [(none)]> show databases;
 2 rows in set (0.00 sec)
 ```
 
-#### 5-1-3 admin_tokenの決定
+### 5-3 admin_tokenの決定
 
 Keystoneのadmin_tokenに設定するトークン文字列を次のようなコマンドを実行して決定します。出力される結果はランダムな英数字になります。
 
@@ -838,7 +835,7 @@ controller# openssl rand -hex 10
 45742a05a541f26ddee8
 ```
 
-### 5-2 パッケージのインストール
+### 5-4 パッケージのインストール
 
 Keystoneのインストール時にサービスの自動起動が行われないようにするため、以下のように実行します。
 
@@ -854,7 +851,7 @@ controller# apt-get install -y keystone apache2 libapache2-mod-wsgi memcached py
 
 <!-- BREAK -->
 
-### 5-3 設定の変更
+### 5-5 Keystoneの設定を変更
 
 keystoneの設定ファイルを変更します。
 
@@ -886,7 +883,7 @@ driver = memcache          ← 追記
 controller# less /etc/keystone/keystone.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-### 5-4 データベースに表を作成
+### 5-6 データベースに表を作成
 
 ```
 controller# su -s /bin/sh -c "keystone-manage db_sync" keystone
@@ -894,7 +891,7 @@ controller# su -s /bin/sh -c "keystone-manage db_sync" keystone
 
 <!-- BREAK -->
 
-### 5-5 Apache Webサーバーの設定
+### 5-7 Apache Webサーバーの設定
 
 + controllerノードの/etc/apache2/apache2.confのServerNameにcontrollerノードのホスト名を設定します。
 
@@ -962,7 +959,7 @@ controller# ln -s /etc/apache2/sites-available/wsgi-keystone.conf /etc/apache2/s
 ```
 
 
-### 5-6 サービスの再起動とDBの削除
+### 5-8 サービスの再起動とDBの削除
 
 + Apache Webサーバーを再起動します。
 
@@ -978,7 +975,7 @@ controller# rm /var/lib/keystone/keystone.db
 
 <!-- BREAK -->
 
-### 5-7 サービスとAPIエンドポイントの作成
+### 5-9 サービスとAPIエンドポイントの作成
 
 以下コマンドでサービスとAPIエンドポイントを設定します。
 
@@ -1019,7 +1016,7 @@ controller# openstack endpoint create --region RegionOne \
 
 <!-- BREAK -->
 
-### 5-8 プロジェクト・ユーザー・ロールの作成
+### 5-10 プロジェクト・ユーザー・ロールの作成
 
 以下コマンドで認証情報（プロジェクト・ユーザー・ロール）を設定します。
 
@@ -1133,7 +1130,7 @@ controller# openstack role add --project demo --user demo user
 
 <!-- BREAK -->
 
-### 5-9 Keystoneの動作の確認
+### 5-11 Keystoneの動作を確認
 
 他のサービスをインストールする前にIdentityサービスが正しく構築、設定されたか動作を検証します。
 
@@ -1159,8 +1156,6 @@ controller# unset OS_TOKEN OS_URL
 
 <!-- BREAK -->
 
-
-### 5-9-1 動作の確認
 動作確認のためadminおよびdemoテナントに対し認証トークンを要求してみます。
 admin、demoユーザーのパスワードを入力する必要があります。
 
@@ -1257,9 +1252,7 @@ Password:
 
 ## 6. Glanceのインストールと設定
 
-### 6-1 データベースの作成・確認
-
-#### 6-1-1 データベース作成
+### 6-1 データベースの作成
 
 MariaDBにデータベースglanceを作成します。
 
@@ -1274,7 +1267,7 @@ EOF
 Enter password: ← MariaDBのrootパスワードpasswordを入力
 ```
 
-#### 6-1-2 データベースの確認
+### 6-2 データベースの確認
 
 ユーザーglanceでログインしデータベースの閲覧が可能であることを確認します。
 
@@ -1297,7 +1290,7 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 6-2 認証情報の作成
+### 6-3 認証情報の作成
 
 以下コマンドで認証情報を作成します。
 
@@ -1363,7 +1356,7 @@ controller# openstack endpoint create --region RegionOne \
 <!-- BREAK -->
 
 
-### 6-3 パッケージのインストール
+### 6-4 パッケージのインストール
 
 apt-getコマンドでglanceとglanceクライアントパッケージをインストールします。
 
@@ -1372,7 +1365,7 @@ controller# apt-get install -y glance python-glanceclient
 ```
 
 
-### 6-4 設定の変更
+### 6-5 Glanceの設定を変更
 
 Glanceの設定を行います。glance-api.conf、glance-registry.confともに、[keystone_authtoken]に追記した設定以外のパラメーターはコメントアウトします。
 
@@ -1440,7 +1433,7 @@ flavor = keystone                ← 追記
 controller# less /etc/glance/glance-registry.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-### 6-5 データベースにデータ登録
+### 6-6 データベースにデータを登録
 
 下記コマンドにてglanceデータベースのセットアップを行います。
 
@@ -1450,7 +1443,7 @@ controller# su -s /bin/sh -c "glance-manage db_sync" glance
 
 <!-- BREAK -->
 
-### 6-6 Glanceサービスの再起動
+### 6-7 Glanceサービスの再起動
 
 設定を反映させるため、Glanceサービスを再起動します。
 
@@ -1458,7 +1451,7 @@ controller# su -s /bin/sh -c "glance-manage db_sync" glance
 controller# service glance-registry restart && service glance-api restart
 ```
 
-### 6-7 動作の確認と使用しないデータベースファイルの削除
+### 6-8 動作の確認と使用しないデータベースファイルの削除
 
 サービスの再起動後、ログを参照しGlance RegistryとGlance APIサービスでエラーが起きていないことを確認します。
 
@@ -1473,11 +1466,11 @@ controller# tailf /var/log/glance/glance-registry.log
 controller# rm /var/lib/glance/glance.sqlite
 ```
 
-### 6-8 イメージの取得と登録
+### 6-9 イメージの取得と登録
 
 Glanceへインスタンス用仮想マシンイメージを登録します。ここでは、クラウド環境で主にテスト用途で利用されるLinuxディストリビューションCirrOSを登録します。
 
-#### 6-8-1 環境変数の設定
+#### 6-9-1 環境変数の設定
 
 Image serviceにAPIバージョン2.0でアクセスするため、スクリプトを修正して読み込み直します。
 
@@ -1486,7 +1479,7 @@ controller# cd
 controller# echo "export OS_IMAGE_API_VERSION=2" | tee -a admin-openrc.sh demo-openrc.shcontroller# source admin-openrc.sh
 ```
 
-#### 6-8-2 イメージ取得
+#### 6-9-2 イメージの取得
 
 CirrOSのWebサイトより仮想マシンイメージをダウンロードします。
 
@@ -1496,7 +1489,7 @@ controller# wget http://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk
 
 <!-- BREAK -->
 
-#### 6-8-3 イメージ登録
+#### 6-9-3 イメージを登録
 
 ダウンロードした仮想マシンイメージをGlanceに登録します。
 
@@ -1526,7 +1519,7 @@ controller# glance image-create --name "cirros-0.3.4-x86_64" --file cirros-0.3.4
 +------------------+--------------------------------------+
 ```
 
-#### 6-8-4 イメージ登録確認
+#### 6-9-4 イメージの登録を確認
 
 仮想マシンイメージが正しく登録されたか確認します。
 
@@ -1653,7 +1646,7 @@ controller# apt-get install -y nova-api nova-cert nova-conductor nova-consoleaut
 nova-scheduler python-novaclient
 ```
 
-### 7-5 設定変更
+### 7-5 Novaの設定を変更
 
 nova.confに下記の設定を追記します。
 
@@ -1761,14 +1754,14 @@ controller# nova image-list
 
 ここまでコントローラーノードの環境構築を行ってきましたが、ここでコンピュートノードに切り替えて設定を行います。
 
-### 8-1 パッケージインストール
+### 8-1 パッケージのインストール
 
 ```
 compute# apt-get update
 compute# apt-get install -y nova-compute sysfsutils
 ```
 
-### 8-2 設定の変更
+### 8-2 Novaの設定を変更
 
 novaの設定ファイルを変更します。
 
@@ -1845,7 +1838,7 @@ virt_type = kvm
 
 <!-- BREAK -->
 
-### 8-3 Nova-Computeサービスの再起動
+### 8-3 Novaコンピュートサービスの再起動
 
 設定を反映させるため、Nova-Computeのサービスを再起動します。
 
@@ -1898,11 +1891,9 @@ controller# openstack hypervisor list
 <!-- BREAK -->
 
 
-## 9. Neutronのインストール・設定（controllerノード）
+## 9. Neutronのインストール・設定（コントローラーノード）
 
-### 9-1 データベース作成・確認
-
-#### 9-1-1 データベース作成
+### 9-1 データベースを作成
 
 MariaDBにデータベースneutronを作成します。
 
@@ -1917,7 +1908,7 @@ EOF
 Enter password: ← MariaDBのrootパスワードpasswordを入力
 ```
 
-#### 9-1-2 データベースの確認
+### 9-2 データベースの確認
 
 MariaDBにNeutronのデータベースが登録されたか確認します。
 
@@ -1943,7 +1934,7 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 9-2 認証情報の設定
+### 9-3 認証情報の設定
 
 以下コマンドで認証情報を設定します。
 
@@ -2006,7 +1997,7 @@ controller# openstack endpoint create --region RegionOne \
 <!-- BREAK -->
 
 
-### 9-3 パッケージのインストール
+### 9-4 パッケージのインストール
 
 本例ではネットワークの構成は公式マニュアルの「[Networking Option 2: Self-service networks](http://docs.openstack.org/liberty/install-guide-ubuntu/neutron-controller-install-option2.html)」の方法で構築する例を示します。
 
@@ -2017,7 +2008,7 @@ controller# apt-get install neutron-server neutron-plugin-ml2 \
  neutron-metadata-agent python-neutronclient
 ```
 
-### 9-4 Neutronコンポーネントの設定を変更
+### 9-5 Neutronコンポーネントの設定を変更
 
 + Neutron Serverの設定
 
@@ -2142,7 +2133,7 @@ controller# less /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v "^\s*$
 
 + Layer-3 agentの設定
 
-external_network_bridgeは単一のエージェントで複数の外部ネットワークを有効にするには、値を指定する必要はないため、値を空白にします。
+external_network_bridgeは単一のエージェントで複数の外部ネットワークを有効にするには値を指定する必要はないため、値を空白にします。
 
 ```
 # vi /etc/neutron/l3_agent.ini
@@ -2227,7 +2218,7 @@ controller# less /etc/neutron/metadata_agent.ini | grep -v "^\s*$" | grep -v "^\
 
 <!-- BREAK -->
 
-### 9-5 Novaの設定を変更
+### 9-6 Novaの設定を変更
 
 Novaの設定ファイルにNeutronの設定を追記します。
 
@@ -2257,7 +2248,7 @@ METADATA_SECRETはMetadata agentで指定した値に置き換えます。
 controller# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-### 9-6 データベースの作成
+### 9-7 データベースの作成
 
 コマンドを実行して、エラーがでないで完了することを確認します。
 
@@ -2276,7 +2267,7 @@ INFO  [alembic.runtime.migration] Running upgrade c40fbb377ad -> 4b47ea298795, a
 
 <!-- BREAK -->
 
-### 9-7 controllerノードのNeutronと関連サービスの再起動
+### 9-8 コントローラーノードのNeutronと関連サービスの再起動
 
 設定を反映させるため、controllerノードの関連サービスを再起動します。
 
@@ -2292,7 +2283,7 @@ controller# service nova-api restart
 controller# service neutron-server restart && service neutron-plugin-linuxbridge-agent restart && service neutron-dhcp-agent restart && service neutron-metadata-agent restart && service neutron-l3-agent restart
 ```
 
-### 9-8 動作の確認
+### 9-9 動作の確認
 
 ログを確認して、エラーが出力されていないことを確認します。
 
@@ -2303,7 +2294,7 @@ controller# tailf neutron-metadata-agent.log
 controller# tailf neutron-plugin-linuxbridge-agent.log
 ```
 
-### 9-9 使用しないデータベースファイル削除
+### 9-10 使用しないデータベースファイル削除
 
 ```
 controller# rm /var/lib/neutron/neutron.sqlite
@@ -2424,7 +2415,7 @@ compute# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 <!-- BREAK -->
 
-### 10-4 computeノードのNeutronと関連サービスを再起動
+### 10-4 コンピュートノードのNeutronと関連サービスを再起動
 
 ネットワーク設定を反映させるため、コンピュートノードのNeutronと関連のサービスを再起動します。
 
@@ -2439,7 +2430,7 @@ compute# tailf /var/log/nova/nova-compute.log
 compute# tailf /var/log/neutron/neutron-plugin-linuxbridge-agent.log
 ```
 
-### 10-6 Neutronサービスの動作の確認
+### 10-6 Neutronサービスの動作を確認
 
 `neutron agent-list`コマンドを実行してNeutronエージェントが正しく認識されており、稼働していることを確認します。
 
@@ -2493,10 +2484,10 @@ controller# neutron agent-list -c host -c alive -c binary
 ```
 
 <!-- BREAK -->
-<!--11/6ここまで編集完了-->
 <!--11/6ここまで構築完了-->
+<!--11/13ここまで編集完了-->
 
-## 12. 仮想ネットワーク設定（controllerノード）
+## 12. 仮想ネットワーク設定（コントローラーノード）
 
 ### 12-1 外部接続ネットワークの設定
 
