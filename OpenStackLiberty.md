@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:0.9.4
+Version:0.9.5
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：0.9.4 (2015/11/16作成)<br>
+バージョン：0.9.5 (2015/11/16作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -20,6 +20,7 @@ Version:0.9.4
 |0.9.2|2015/11/16|Beta2:誤記、表記ゆれの修正および不要項目の削除|
 |0.9.3|2015/11/16|Beta3:表記ゆれの修正およびMariaDBをコントローラーノードに移動|
 |0.9.4|2015/11/16|Beta4:Glanceのログの注記の追加と軽微な表現の修正|
+|0.9.5|2015/11/16|Beta5:各所apt-get updateのコマンドを削除、コンピュートのマッピング設定をわかりやすく書き換えた|
 
 ````
 筆者注:このドキュメントはKilo版をベースに編集中です。提案や誤りの指摘は
@@ -521,7 +522,6 @@ rabbitmq-serverパッケージをインストールします。
 標準リポジトリーにある最新版をインストールします。
 
 ```
-controller# apt-get update
 controller# apt-cache policy rabbitmq-server
 rabbitmq-server:
   Installed: (none)
@@ -1606,7 +1606,6 @@ controller# nova image-list
 ### 7-1 パッケージのインストール
 
 ```
-compute# apt-get update
 compute# apt-get install -y nova-compute sysfsutils
 ```
 
@@ -1849,7 +1848,6 @@ controller# openstack endpoint create --region RegionOne \
 本書ではネットワークの構成は公式マニュアルの「[Networking Option 2: Self-service networks](http://docs.openstack.org/liberty/install-guide-ubuntu/neutron-controller-install-option2.html)」の方法で構築する例を示します。
 
 ```
-controller# apt-get update
 controller# apt-get install neutron-server neutron-plugin-ml2 \
  neutron-plugin-linuxbridge-agent neutron-l3-agent neutron-dhcp-agent \
  neutron-metadata-agent python-neutronclient
@@ -2162,7 +2160,6 @@ controller# rm /var/lib/neutron/neutron.sqlite
 ### 9-1 パッケージのインストール
 
 ```
-compute# apt-get update
 compute# apt-get install neutron-plugin-linuxbridge-agent
 ```
 
@@ -2204,7 +2201,7 @@ compute# less /etc/neutron/neutron.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 + Linuxブリッジエージェントの設定
 
-PUBLIC_INTERFACE_NAMEにはパブリック側のネットワークに接続しているインターフェイスを指定します。local_ipにはパブリック側に接続しているNICに設定しているIPアドレスを指定します。
+physical_interface_mappingsにはパブリック側のネットワークに接続しているインターフェイスを指定します。本書ではeth0を指定します。local_ipにはパブリック側に接続しているNICに設定しているIPアドレスを指定します。
 
 追記と書かれていない項目は設定があればアンコメントして設定を変更、なければ追記してください。
 
@@ -2212,7 +2209,7 @@ PUBLIC_INTERFACE_NAMEにはパブリック側のネットワークに接続し�
 compute# vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 
 [linux_bridge]
-physical_interface_mappings = public:PUBLIC_INTERFACE_NAME
+physical_interface_mappings = public:eth0
 
 [vxlan]
 enable_vxlan = True
@@ -2447,7 +2444,7 @@ Created a new subnet:
 
 #### 10-3-1 demo-routerを作成
 
-仮想ネットワークルータを作成します。
+仮想ネットワークルーターを作成します。
 
 ```
 controller(demo)# neutron router-create demo-router
@@ -2721,7 +2718,6 @@ controller# openstack endpoint create --region RegionOne \
 本書ではBlock StorageコントローラーとBlock Storageボリュームコンポーネントを一台のマシンで構築するため、両方の役割をインストールします。
 
 ```
-controller# apt-get update
 controller# apt-get install -y lvm2 cinder-api cinder-scheduler cinder-volume python-mysqldb python-cinderclient 
 ```
 
