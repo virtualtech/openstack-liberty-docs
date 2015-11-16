@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:0.9.3
+Version:0.9.4
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：0.9.3 (2015/11/16作成)<br>
+バージョン：0.9.4 (2015/11/16作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -17,9 +17,9 @@ Version:0.9.3
 |:---|:---|:---|
 |0.9.0|2015/11/02|Liberty版執筆開始|
 |0.9.1|2015/11/13|Liberty版Beta1|
-|0.9.2|2015/11/16|Liberty版Beta2:誤記、表記ゆれの修正および不要項目の削除|
-|0.9.3|2015/11/16|Liberty版Beta3:表記ゆれの修正およびMariaDBをコントローラーノードに移動|
-
+|0.9.2|2015/11/16|Beta2:誤記、表記ゆれの修正および不要項目の削除|
+|0.9.3|2015/11/16|Beta3:表記ゆれの修正およびMariaDBをコントローラーノードに移動|
+|0.9.4|2015/11/16|Beta4:Glanceのログの注記の追加と軽微な表現の修正|
 
 ````
 筆者注:このドキュメントはKilo版をベースに編集中です。提案や誤りの指摘は
@@ -31,7 +31,6 @@ https://github.com/virtualtech/openstack-liberty-docs/issues
 
 ##目次
 <!--TOC max3-->
-
 <!-- BREAK -->
 
 #Part.1 OpenStack 構築編
@@ -54,7 +53,7 @@ Ubuntu Serverでは新しいハードウェアのサポートを積極的に行�
 一般的な利用では特に問題ありませんが、OpenStackとSDNのソリューションを連携した環境を作る場合などに、Linux KernelやOSのバージョンを考慮しなくてはならない場合があります。
 また、Trustyの場合はLinux Kernel v3.13以外のバージョンのサポート期間は18ヶ月になっています。期限が切れた後はLinux Kernel v3.13にダウングレードするか、手動で新しいLinux Kernelをインストールすることができるメタパッケージを導入する必要がありますので注意してください。
 
-本書ではサポート期間が長く、Trustyの初期リリースの標準カーネルであるLinux Kernel v3.13を使うために、以下のURLよりイメージをダウンロードしたUbuntu Server 14.04.1 LTS(以下Ubuntu Server)のイメージを使ってインストールします。インストール後`apt-get dist-upgrade`を行って最新のアップデートを適用した状態にしてください。Trustyではこのコマンドを実行してもカーネルのバージョンがアップグレードすることはありません。
+本書ではサポート期間が長く、Trustyの初期リリースの標準カーネルであるLinux Kernel v3.13を使うために、以下のURLよりイメージをダウンロードしたUbuntu Server 14.04.1 LTS(以下Ubuntu Server)のイメージを使ってインストールします。インストール後`apt-get dist-upgrade`を行って最新のアップデートを適用した状態にしてください。Trustyではこのコマンドを実行してもカーネルのバージョンがアップグレードされることはありません。
 
 本書は3.13.0-68以降のバージョンのカーネルで動作するUbuntu 14.04.3を想定しています。
 
@@ -511,7 +510,6 @@ SQLノード以外のノードに、インストール済みのMariaDBと同様�
 <!-- BREAK -->
 
 
-
 ### 3-2 RabbitMQのインストール
 
 OpenStackは、オペレーションやステータス情報を各サービス間で連携するためにメッセージブローカーを使用しています。OpenStackではRabbitMQ、Qpid、ZeroMQなど複数のメッセージブローカーサービスに対応しています。
@@ -631,7 +629,7 @@ export PS1='\u@\h \W(demo)\$ '
 
 各サービス間の連携時に使用する認証サービスKeystoneのインストールと設定を行います。
 
-### 4-1 データベースの作成
+### 4-1 データベースを作成
 
 Keystoneで使用するデータベースを作成します。
 SQLサーバー上でMariaDBにデータベースkeystoneを作成します。
@@ -809,7 +807,7 @@ controller# ln -s /etc/apache2/sites-available/wsgi-keystone.conf /etc/apache2/s
 controller# service apache2 restart
 ```
 
-+ パッケージインストール時に作成される不要なSQLiteファイルを削除します。
++ パッケージのインストール時に作成される不要なSQLiteファイルを削除します。
 
 ```
 controller# rm /var/lib/keystone/keystone.db
@@ -858,7 +856,7 @@ controller# openstack endpoint create --region RegionOne \
 
 <!-- BREAK -->
 
-### 4-10 プロジェクト・ユーザー・ロールの作成
+### 4-10 プロジェクトとユーザー、ロールの作成
 
 以下コマンドで認証情報（プロジェクト・ユーザー・ロール）を設定します。
 
@@ -1096,7 +1094,7 @@ Password:
 
 ## 5. Glanceのインストールと設定
 
-### 5-1 データベースの作成
+### 5-1 データベースを作成
 
 MariaDBにデータベースglanceを作成します。
 
@@ -1134,11 +1132,11 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 5-3 認証情報の作成
+### 5-3 ユーザーとサービス、APIエンドポイントの作成
 
-以下コマンドで認証情報を作成します。
+以下コマンドで認証情報を読み込んだあと、サービスとAPIエンドポイントを設定します。
 
-+ 環境変数の設定
++ 環境変数ファイルの読み込み
 
 admin-openrc.shを読み込むと次のように出力が変化します。
 
@@ -1304,6 +1302,14 @@ controller# tailf /var/log/glance/glance-api.log
 controller# tailf /var/log/glance/glance-registry.log
 ```
 
+Glanceのインストール直後はGlanceのログに「glance.store.swift.Storeを読みこむことができなかった」といったエラーが出ることがありますが、本書の例に従った場合はGlanceのバックエンドとしてSwiftストレージは使わないため、無視して構いません。正しく設定が行われるとエラー出力はされなくなります。
+
+```
+ERROR stevedore.extension [-] Could not load 'glance.store.swift.Store': No module named swiftclient
+ERROR stevedore.extension [-] No module named swiftclient
+```
+
+
 インストール直後は作られていない場合が多いですが、コマンドを実行してglance.sqliteを削除します。
 
 ```
@@ -1372,7 +1378,7 @@ controller# openstack image list
 
 ## 6. Novaのインストールと設定（コントローラーノード）
 
-### 6-1 データベースの作成
+### 6-1 データベースを作成
 
 MariaDBにデータベースnovaを作成します。
 
@@ -1410,11 +1416,11 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 6-3 認証情報の作成
+### 6-3 ユーザーとサービス、APIエンドポイントの作成
 
-以下コマンドで認証情報を作成します。
+以下コマンドで認証情報を読み込んだあと、サービスとAPIエンドポイントを設定します。
 
-+ 環境変数の設定
++ 環境変数ファイルの読み込み
 
 ```
 controller# source admin-openrc.sh
@@ -1775,11 +1781,11 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 8-3 認証情報の設定
+### 8-3 ユーザーとサービス、APIエンドポイントの作成
 
-以下コマンドで認証情報を設定します。
+以下コマンドで認証情報を読み込んだあと、サービスとAPIエンドポイントを設定します。
 
-+ 環境変数の設定
++ 環境変数ファイルの読み込み
 
 ```
 controller# source admin-openrc.sh
@@ -2095,7 +2101,7 @@ METADATA_SECRETはMetadataエージェントで指定した値に置き換えま
 controller# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-### 8-7 データベースの作成
+### 8-7 データベースを作成
 
 コマンドを実行して、エラーがでないで完了することを確認します。
 
@@ -2136,9 +2142,9 @@ controller# service neutron-server restart && service neutron-plugin-linuxbridge
 
 ```
 controller# tailf /var/log/nova/nova-api.log
-controller# tailf neutron-server.log
-controller# tailf neutron-metadata-agent.log
-controller# tailf neutron-plugin-linuxbridge-agent.log
+controller# tailf /var/log/neutron/neutron-server.log
+controller# tailf /var/log/neutron/neutron-metadata-agent.log
+controller# tailf /var/log/neutron/neutron-plugin-linuxbridge-agent.log
 ```
 
 ### 8-10 使用しないデータベースファイル削除
@@ -2304,17 +2310,17 @@ controller# neutron agent-list -c host -c alive -c binary
 
 ### 10-1 外部接続ネットワークの設定
 
-#### 10-1-1 admin環境変数読み込み
+#### 10-1-1 admin環境変数ファイルの読み込み
 
-外部接続用ネットワーク作成するためにadmin環境変数を読み込みます。
+パブリックネットワークをadmin権限で作成するためにadmin環境変数を読み込みます。
 
 ```
 controller# source admin-openrc.sh
 ```
 
-#### 10-1-2 外部ネットワーク作成
+#### 10-1-2 パブリックネットワークの作成
 
-ext-netという名前で外部用ネットワークを作成します。
+ext-netと言う名前のパブリックネットワークを作成します。
 
 ```
 controller(admin)# neutron net-create ext-net --router:external \
@@ -2341,9 +2347,9 @@ Created a new network:
 
 <!-- BREAK -->
 
-#### 10-1-3 外部ネットワーク用サブネット作成
+#### 10-1-3 パブリックネットワーク用サブネットの作成
 
-ext-subnetという名前で外部ネットワーク用サブネットを作成します。
+ext-subnetという名前でパブリックネットワーク用サブネットを作成します。
 
 ```
 controller(admin)# neutron subnet-create ext-net --name ext-subnet \
@@ -2370,11 +2376,11 @@ Created a new subnet:
 +-------------------+----------------------------------------------------+
 ```
 
-### 10-2 インスタンス用ネットワーク設定
+### 10-2 インスタンス用ネットワークの設定
 
-#### 10-2-1 demo環境変数読み込み
+#### 10-2-1 demoユーザーと環境変数ファイルの読み込み
 
-インスタンス用ネットワーク作成するためにdemo環境変数読み込みます。
+インスタンス用ネットワークを作成するためにdemo環境変数を読み込みます。
 
 ```
 controller# source demo-openrc.sh
@@ -2382,7 +2388,7 @@ controller# source demo-openrc.sh
 
 <!-- BREAK -->
 
-#### 10-2-2 インスタンス用ネットワーク作成
+#### 10-2-2 インスタンス用ネットワークの作成
 
 demo-netという名前でインスタンス用ネットワークを作成します。
 
@@ -2405,7 +2411,7 @@ Created a new network:
 +-----------------------+--------------------------------------+
 ```
 
-#### 10-2-3 インスタンス用ネットワークサブネット作成
+#### 10-2-3 インスタンス用ネットワークのサブネットを作成
 
 demo-subnetという名前でインスタンス用ネットワークサブネットを作成します。
 
@@ -2434,7 +2440,7 @@ Created a new subnet:
 
 <!-- BREAK -->
 
-### 10-3 仮想ネットワークルーター設定
+### 10-3 仮想ネットワークルーターの設定
 
 仮想ネットワークルーターを作成して外部接続用ネットワークとインスタンス用ネットワークをルーターに接続し、双方でデータのやり取りを行えるようにします。
 
@@ -2459,7 +2465,7 @@ Created a new router:
 +-----------------------+--------------------------------------+
 ```
 
-#### 10-3-2 demo-routerにsubnetを追加
+#### 10-3-2 demo-routerにサブネットを追加
 
 仮想ネットワークルーターにインスタンス用ネットワークを接続します。
 
@@ -2468,7 +2474,7 @@ controller(demo)# neutron router-interface-add demo-router demo-subnet
 Added interface 7337070d-455f-406d-8ebd-24dba7deea3a to router demo-router.
 ```
 
-#### 10-3-3 demo-routerにgatewayを追加
+#### 10-3-3 demo-routerにゲートウェイを追加
 
 仮想ネットワークルーターに外部ネットワークを接続します。
 
@@ -2585,9 +2591,9 @@ Request to delete server vm1 has been accepted.
 
 <!-- BREAK -->
 
-## 11. Cinderインストール（コントローラーノード）
+## 11. Cinderのインストール（コントローラーノード）
 
-### 11-1 データベース作成
+### 11-1 データベースを作成
 
 MariaDBのデータベースにCinderのデータベースを作成します。
 
@@ -2627,11 +2633,9 @@ MariaDB [(none)]> show databases;
 <!-- BREAK -->
 
 
-### 11-3 認証情報の設定
+### 11-3 Cinderサービスなどの作成
 
-以下コマンドで認証情報を設定します。
-
-+ 環境変数の設定
++ admin環境変数を読み込み
 
 ```
 controller# source admin-openrc.sh
@@ -2712,7 +2716,7 @@ controller# openstack endpoint create --region RegionOne \
 <!-- BREAK -->
 
 
-### 11-4 パッケージインストール
+### 11-4 パッケージのインストール
 
 本書ではBlock StorageコントローラーとBlock Storageボリュームコンポーネントを一台のマシンで構築するため、両方の役割をインストールします。
 
@@ -2880,12 +2884,11 @@ controller# openstack volume list -c "Display Name" -c "Size"
 
 クライアントマシンからブラウザーでOpenStack環境を操作可能なWebインターフェイスをインストールします。
 
-### 12-1 パッケージインストール
+### 12-1 パッケージのインストール
 
 コントローラーノードにDashboardをインストールします。
 
 ```
-controller# apt-get update
 controller# apt-get install -y openstack-dashboard
 ```
 
@@ -3005,7 +3008,7 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 
 <!-- BREAK -->
 
-### 12コントローラーノード-8 インスタンスへのアクセス
+### 12-8 インスタンスへのアクセス
 
 Floating IPを割り当てて、かつセキュリティグループの設定を適切に行っていれば、リモートアクセスできるようになります。セキュリティーグループでSSHを許可した場合、端末からSSH接続が可能になります（下記は実行例）。
 
