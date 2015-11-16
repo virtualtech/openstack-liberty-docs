@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:0.9.2
+Version:0.9.3
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：0.9.2 (2015/11/16作成)<br>
+バージョン：0.9.3 (2015/11/16作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -18,6 +18,7 @@ Version:0.9.2
 |0.9.0|2015/11/02|Liberty版執筆開始|
 |0.9.1|2015/11/13|Liberty版Beta1|
 |0.9.2|2015/11/16|Liberty版Beta2:誤記、表記ゆれの修正および不要項目の削除|
+|0.9.3|2015/11/16|Liberty版Beta3:表記ゆれの修正およびMariaDBをコントローラーノードに移動|
 
 
 ````
@@ -63,21 +64,22 @@ Ubuntu Serverでは新しいハードウェアのサポートを積極的に行�
 
 ### 1-2 作成するサーバー（ノード）
 
-本書はOpenStack環境をSQL,Controller,Computeの3台のサーバー上に構築することを想定しています。
+本書はOpenStack環境をController,Computeの2台のサーバー上に構築することを想定しています。
 
-SQL           | コントローラー | コンピュート 
-------------- | -------------- | --------------
-MariaDB       | RabbitMQ       | Linux KVM
-              | NTP            | Nova Compute
-              | Keystone       | Linux Bridge Agent
-              | Glance
-              | Nova
-              | Neutron Server
-              | Linux Bridge Agent
-              | L3 Agent
-              | DHCP Agent
-              | Metadata Agent
-              | Cinder
+| コントローラー | コンピュート 
+| -------------- | --------------
+| RabbitMQ       | Linux KVM
+| NTP            | Nova Compute
+| MariaDB        | Linux Bridge Agent
+| Keystone       
+| Glance
+| Nova
+| Neutron Server
+| Linux Bridge Agent
+| L3 Agent
+| DHCP Agent
+| Metadata Agent
+| Cinder
                
 
 <!-- BREAK -->
@@ -98,16 +100,7 @@ IPアドレスは以下の構成で構築されている前提で解説します
 
 各ノードのネットワーク設定は以下の通りです。
 
-+ sqlノード
-
-|インターフェース|eth0|
-|:---|:---|:---|
-|IPアドレス|10.0.0.100|
-|ネットマスク|255.255.255.0|
-|ゲートウェイ|10.0.0.1|
-|ネームサーバー|10.0.0.1|
-
-+ controllerノード
++ コントローラーノード
 
 |インターフェース|eth0|
 |:---|:---|:---|
@@ -116,7 +109,7 @@ IPアドレスは以下の構成で構築されている前提で解説します
 |ゲートウェイ|10.0.0.1|
 |ネームサーバー|10.0.0.1|
 
-+ computeノード
++ コンピュートノード
 
 |インターフェース|eth0|
 |:---|:---|:---|
@@ -151,7 +144,7 @@ IPアドレスは以下の構成で構築されている前提で解説します
 |キーボードレイアウトの認識|No|
 |キーボードの言語|Japanese→Japanese|
 |優先するNIC|eth0: Ethernet|
-|ホスト名|それぞれのノード名(sql, controller, compute)|
+|ホスト名|それぞれのノード名(controller, compute)|
 |ユーザ名とパスワード|フルネームで入力|
 |アカウント名|ユーザ名のファーストネームで設定される|
 |パスワード|任意のパスワード|
@@ -232,7 +225,7 @@ controller# vi /etc/glance/glance-api.conf ←コマンド冒頭にこのコマ�
 
 [database] ←この見出しから次の見出しまでの間に以下を記述
 #connection = sqlite:////var/lib/glance/glance.sqlite          ← 既存設定をコメントアウト
-connection = mysql://glance:password@sql/glance         ← 追記
+connection = mysql://glance:password@controller/glance         ← 追記
 
 
 [keystone_authtoken] ← 見出し
@@ -265,22 +258,7 @@ OpenStackパッケージのインストール前に各々のノードで以下�
 
 各ノードの/etc/network/interfacesを編集し、IPアドレスの設定を行います。
 
-#### 2-1-1 SQLノードのIPアドレスの設定
-
-```
-sql# vi /etc/network/interfaces
-
-auto eth0
-iface eth0 inet static
-      address 10.0.0.100
-      netmask 255.255.255.0
-      gateway 10.0.0.1
-      dns-nameservers 10.0.0.1
-```
-
-<!-- BREAK -->
-
-#### 2-1-2 コントローラーノードのIPアドレスの設定
+#### 2-1-1 コントローラーノードのIPアドレスの設定
 
 ```
 controller# vi /etc/network/interfaces
@@ -293,7 +271,9 @@ iface eth0 inet static
       dns-nameservers 10.0.0.1
 ```
 
-#### 2-1-3 コンピュートノードのIPアドレスの設定
+<!-- BREAK -->
+
+#### 2-1-2 コンピュートノードのIPアドレスの設定
 
 ```
 compute1# vi /etc/network/interfaces
@@ -345,13 +325,8 @@ controller
 127.0.0.1 localhost
 #127.0.1.1 controller ← 既存設定をコメントアウト
 #ext
-10.0.0.100 sql
 10.0.0.101 controller
 10.0.0.102 compute
-#int
-192.168.0.100 sql-int
-192.168.0.101 controller-int
-192.168.0.102 compute-int
 ```
 
 <!-- BREAK -->
@@ -415,7 +390,7 @@ controller# service chrony restart
 
 #### 2-5-3 その他ノードの時刻同期サーバーの設定
 
-SQLノードとコンピュートノードでコントローラーノードと同期するNTPサーバーを構築します。
+コンピュートノードでコントローラーノードと同期するNTPサーバーを構築します。
 
 ```
 compute# vi /etc/chrony/chrony.conf
@@ -474,18 +449,18 @@ MS Name/IP address         Stratum Poll Reach LastRx Last sample
 
 <!-- BREAK -->
 
-## 3. SQLノードの事前設定
+## 3. コントローラーノードのインストール前設定
 
 ### 3-1 MariaDBのインストール
 
-SQLノードにデータベースサーバーのMariaDBをインストールします。
+ノードにデータベースサーバーのMariaDBをインストールします。
 
 #### 3-1-1 パッケージのインストール
 
 apt-getコマンドでmariadb-serverパッケージをインストールします。
 
 ```
-sql# apt-get install -y mariadb-server
+controller# apt-get install -y mariadb-server
 ```
 
 インストール中にパスワードの入力を要求されますので、MariaDBのrootユーザーに対するパスワードを設定します。
@@ -503,7 +478,7 @@ MariaDBの設定ファイルmy.cnfを開き以下の設定を変更します。
 ※文字コードをutf8に変更しないとOpenStackモジュールとデータベース間の通信でエラーが発生します。
 
 ```
-sql# vi /etc/mysql/my.cnf
+controller# vi /etc/mysql/my.cnf
 
 [mysqld]
 #bind-address = 127.0.0.1                   ← 既存設定をコメントアウト
@@ -522,7 +497,7 @@ character-set-server = utf8                 ← 追記
 変更した設定を反映させるためMariaDBのサービスを再起動します。
 
 ```
-sql# service mysql restart
+controller# service mysql restart
 ```
 
 #### 3-1-4 MariaDBクライアントのインストール
@@ -535,14 +510,14 @@ SQLノード以外のノードに、インストール済みのMariaDBと同様�
 
 <!-- BREAK -->
 
-## 4. コントローラーノードのインストール前設定
 
-### 4-1 RabbitMQのインストール
+
+### 3-2 RabbitMQのインストール
 
 OpenStackは、オペレーションやステータス情報を各サービス間で連携するためにメッセージブローカーを使用しています。OpenStackではRabbitMQ、Qpid、ZeroMQなど複数のメッセージブローカーサービスに対応しています。
 本書ではRabbitMQをインストールする例を説明します。
 
-#### 4-1-1 パッケージのインストール
+#### 3-2-1 パッケージのインストール
 
 rabbitmq-serverパッケージをインストールします。
 標準リポジトリーにある最新版をインストールします。
@@ -564,7 +539,7 @@ controller# apt-mark hold rabbitmq-server               ← バージョンを�
 
 <!-- BREAK -->
 
-#### 4-1-2 openstackユーザーと権限の設定
+#### 3-2-2 openstackユーザーと権限の設定
 
 RabbitMQにアクセスするためのユーザーとしてopenstackユーザーを作成し、必要なパーミッションを設定します。次はRabbitMQのパスワードをpasswordにする例です。
 
@@ -573,7 +548,7 @@ controller# rabbitmqctl add_user openstack password
 controller# rabbitmqctl set_permissions openstack ".*" ".*" ".*"
 ```
 
-#### 4-1-3 待ち受けIPアドレス・ポートとセキュリティ設定の変更
+#### 3-2-3 待ち受けIPアドレス・ポートとセキュリティ設定の変更
 
 以下の設定ファイルを作成し、RabbitMQの待ち受けポートとIPアドレスを定義します。
 
@@ -589,7 +564,7 @@ HOSTNAME=controller
 
 <!-- BREAK -->
 
-#### 4-1-4 RabbitMQサービス再起動と確認
+#### 3-2-4 RabbitMQサービス再起動と確認
 
 + ログの確認
 
@@ -610,9 +585,9 @@ Server startup complete; 0 plugins started.
 <!-- BREAK -->
 
 
-### 4-2 環境変数設定ファイルの作成
+### 3-3 環境変数設定ファイルの作成
 
-#### 4-2-1 admin環境変数設定ファイルの作成
+#### 3-3-1 admin環境変数設定ファイルの作成
 
 adminユーザー用環境変数設定ファイルを作成します。
 
@@ -631,7 +606,7 @@ export OS_IMAGE_API_VERSION=2
 export PS1='\u@\h \W(admin)\$ '
 ```
 
-#### 4-2-2 demo環境変数設定ファイルの作成
+#### 3-3-2 demo環境変数設定ファイルの作成
 
 demoユーザー用環境変数設定ファイルを作成します。
 
@@ -652,17 +627,17 @@ export PS1='\u@\h \W(demo)\$ '
 
 <!-- BREAK -->
 
-## 5. Keystoneインストールと設定（コントローラーノード）
+## 4. Keystoneインストールと設定（コントローラーノード）
 
 各サービス間の連携時に使用する認証サービスKeystoneのインストールと設定を行います。
 
-### 5-1 データベースの作成
+### 4-1 データベースの作成
 
 Keystoneで使用するデータベースを作成します。
 SQLサーバー上でMariaDBにデータベースkeystoneを作成します。
 
 ```
-sql# mysql -u root -p << EOF
+controller# mysql -u root -p << EOF
 CREATE DATABASE keystone;
 GRANT ALL PRIVILEGES ON keystone.* TO 'keystone'@'localhost' \
 IDENTIFIED BY 'password';
@@ -672,12 +647,12 @@ EOF
 Enter password: ← MariaDBのrootパスワードpasswordを入力
 ```
 
-### 5-2 データベースの確認
+### 4-2 データベースの確認
 
 SQLノードにユーザーkeystoneでログインしデータベースの閲覧が可能であることを確認します。
 
 ```
-sql# mysql -u keystone -p
+controller# mysql -u keystone -p
 Enter password:  ← MariaDBのkeystoneパスワードpasswordを入力
 ...
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
@@ -694,7 +669,7 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 5-3 admin_tokenの決定
+### 4-3 admin_tokenの決定
 
 Keystoneのadmin_tokenに設定するトークン文字列を次のようなコマンドを実行して決定します。出力される結果はランダムな英数字になります。
 
@@ -703,7 +678,7 @@ controller# openssl rand -hex 10
 45742a05a541f26ddee8
 ```
 
-### 5-4 パッケージのインストール
+### 4-4 パッケージのインストール
 
 Keystoneのインストール時にサービスの自動起動が行われないようにするため、以下のように実行します。
 
@@ -719,7 +694,7 @@ controller# apt-get install -y keystone apache2 libapache2-mod-wsgi memcached py
 
 <!-- BREAK -->
 
-### 5-5 Keystoneの設定を変更
+### 4-5 Keystoneの設定を変更
 
 keystoneの設定ファイルを変更します。
 
@@ -732,7 +707,7 @@ log_dir = /var/log/keystone          ← 設定されていることを確認
 ...
 [database]
 #connection = sqlite:////var/lib/keystone/keystone.db    ← 既存設定をコメントアウト
-connection = mysql+pymysql://keystone:password@sql/keystone  ← 追記
+connection = mysql+pymysql://keystone:password@controller/keystone  ← 追記
 ...
 [memcache]...servers = localhost:11211  ← アンコメント
 ...
@@ -750,7 +725,7 @@ driver = memcache          ← 追記
 controller# less /etc/keystone/keystone.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-### 5-6 データベースに表を作成
+### 4-6 データベースに表を作成
 
 ```
 controller# su -s /bin/sh -c "keystone-manage db_sync" keystone
@@ -758,9 +733,9 @@ controller# su -s /bin/sh -c "keystone-manage db_sync" keystone
 
 <!-- BREAK -->
 
-### 5-7 Apache Webサーバーの設定
+### 4-7 Apache Webサーバーの設定
 
-+ controllerノードの/etc/apache2/apache2.confのServerNameにcontrollerノードのホスト名を設定します。
++ コントローラーノードの/etc/apache2/apache2.confのServerNameにコントローラーノードのホスト名を設定します。
 
 ```
 # Global configuration
@@ -826,7 +801,7 @@ controller# ln -s /etc/apache2/sites-available/wsgi-keystone.conf /etc/apache2/s
 ```
 
 
-### 5-8 サービスの再起動とDBの削除
+### 4-8 サービスの再起動とDBの削除
 
 + Apache Webサーバーを再起動します。
 
@@ -842,7 +817,7 @@ controller# rm /var/lib/keystone/keystone.db
 
 <!-- BREAK -->
 
-### 5-9 サービスとAPIエンドポイントの作成
+### 4-9 サービスとAPIエンドポイントの作成
 
 以下コマンドでサービスとAPIエンドポイントを設定します。
 
@@ -883,7 +858,7 @@ controller# openstack endpoint create --region RegionOne \
 
 <!-- BREAK -->
 
-### 5-10 プロジェクト・ユーザー・ロールの作成
+### 4-10 プロジェクト・ユーザー・ロールの作成
 
 以下コマンドで認証情報（プロジェクト・ユーザー・ロール）を設定します。
 
@@ -999,7 +974,7 @@ controller# openstack role add --project demo --user demo user
 
 <!-- BREAK -->
 
-### 5-11 Keystoneの動作を確認
+### 4-11 Keystoneの動作を確認
 
 他のサービスをインストールする前にIdentityサービスが正しく構築、設定されたか動作を検証します。
 
@@ -1119,14 +1094,14 @@ Password:
 <!-- BREAK -->
 
 
-## 6. Glanceのインストールと設定
+## 5. Glanceのインストールと設定
 
-### 6-1 データベースの作成
+### 5-1 データベースの作成
 
 MariaDBにデータベースglanceを作成します。
 
 ```
-sql# mysql -u root -p << EOF
+controller# mysql -u root -p << EOF
 CREATE DATABASE glance;
 GRANT ALL PRIVILEGES ON glance.* TO 'glance'@'localhost' \
  IDENTIFIED BY 'password';
@@ -1136,12 +1111,12 @@ EOF
 Enter password: ← MariaDBのrootパスワードpasswordを入力
 ```
 
-### 6-2 データベースの確認
+### 5-2 データベースの確認
 
 ユーザーglanceでログインしデータベースの閲覧が可能であることを確認します。
 
 ```
-sql# mysql -u glance -p
+controller# mysql -u glance -p
 Enter password: ← MariaDBのglanceパスワードpasswordを入力
 ...
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
@@ -1159,7 +1134,7 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 6-3 認証情報の作成
+### 5-3 認証情報の作成
 
 以下コマンドで認証情報を作成します。
 
@@ -1225,7 +1200,7 @@ controller# openstack endpoint create --region RegionOne \
 <!-- BREAK -->
 
 
-### 6-4 パッケージのインストール
+### 5-4 パッケージのインストール
 
 apt-getコマンドでglanceとglanceクライアントパッケージをインストールします。
 
@@ -1234,7 +1209,7 @@ controller# apt-get install -y glance python-glanceclient
 ```
 
 
-### 6-5 Glanceの設定を変更
+### 5-5 Glanceの設定を変更
 
 Glanceの設定を行います。glance-api.conf、glance-registry.confともに、[keystone_authtoken]に追記した設定以外のパラメーターはコメントアウトします。
 
@@ -1247,7 +1222,7 @@ notification_driver = noop    ← アンコメント
 ...
 [database]
 #sqlite_db = /var/lib/glance/glance.sqlite         ← 既存設定をコメントアウト
-connection = mysql+pymysql://glance:password@sql/glance   ← 追記
+connection = mysql+pymysql://glance:password@controller/glance   ← 追記
 ...
 [glance_store]
 ...
@@ -1281,7 +1256,7 @@ notification_driver = noop    ← アンコメント
 ...
 [database]
 #sqlite_db = /var/lib/glance/glance.sqlite             ← 既存設定をコメントアウト
-connection = mysql+pymysql://glance:password@sql/glance   ← 追記
+connection = mysql+pymysql://glance:password@controller/glance   ← 追記
 
 [glance_store]
 ...
@@ -1302,7 +1277,7 @@ flavor = keystone                ← 追記
 controller# less /etc/glance/glance-registry.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-### 6-6 データベースにデータを登録
+### 5-6 データベースにデータを登録
 
 下記コマンドにてglanceデータベースのセットアップを行います。
 
@@ -1312,7 +1287,7 @@ controller# su -s /bin/sh -c "glance-manage db_sync" glance
 
 <!-- BREAK -->
 
-### 6-7 Glanceサービスの再起動
+### 5-7 Glanceサービスの再起動
 
 設定を反映させるため、Glanceサービスを再起動します。
 
@@ -1320,7 +1295,7 @@ controller# su -s /bin/sh -c "glance-manage db_sync" glance
 controller# service glance-registry restart && service glance-api restart
 ```
 
-### 6-8 ログの確認と使用しないデータベースファイルの削除
+### 5-8 ログの確認と使用しないデータベースファイルの削除
 
 サービスの再起動後、ログを参照しGlance RegistryとGlance APIサービスでエラーが起きていないことを確認します。
 
@@ -1335,11 +1310,11 @@ controller# tailf /var/log/glance/glance-registry.log
 controller# rm /var/lib/glance/glance.sqlite
 ```
 
-### 6-9 イメージの取得と登録
+### 5-9 イメージの取得と登録
 
 Glanceへインスタンス用仮想マシンイメージを登録します。ここでは、クラウド環境で主にテスト用途で利用されるLinuxディストリビューションCirrOSを登録します。
 
-#### 6-9-1 イメージの取得
+#### 5-9-1 イメージの取得
 
 CirrOSのWebサイトより仮想マシンイメージをダウンロードします。
 
@@ -1349,7 +1324,7 @@ controller# wget http://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk
 
 <!-- BREAK -->
 
-#### 6-9-2 イメージを登録
+#### 5-9-2 イメージを登録
 
 ダウンロードした仮想マシンイメージをGlanceに登録します。
 
@@ -1379,7 +1354,7 @@ controller# glance image-create --name "cirros-0.3.4-x86_64" --file cirros-0.3.4
 +------------------+--------------------------------------+
 ```
 
-#### 6-9-3 イメージの登録を確認
+#### 5-9-3 イメージの登録を確認
 
 仮想マシンイメージが正しく登録されたか確認します。
 
@@ -1395,14 +1370,14 @@ controller# openstack image list
 <!-- BREAK -->
 
 
-## 7. Novaのインストールと設定（コントローラーノード）
+## 6. Novaのインストールと設定（コントローラーノード）
 
-### 7-1 データベースの作成
+### 6-1 データベースの作成
 
 MariaDBにデータベースnovaを作成します。
 
 ```
-sql# mysql -u root -p << EOF
+controller# mysql -u root -p << EOF
 CREATE DATABASE nova;
 GRANT ALL PRIVILEGES ON nova.* TO 'nova'@'localhost' \
 IDENTIFIED BY 'password';
@@ -1412,12 +1387,12 @@ EOF
 Enter password:           ← MariaDBのrootパスワードpasswordを入力
 ```
 
-### 7-2 データベースの確認
+### 6-2 データベースの確認
 
 ユーザーnovaでログインしデータベースの閲覧が可能であることを確認します。
 
 ```
-sql# mysql -u nova -p
+controller# mysql -u nova -p
 Enter password: ← MariaDBのnovaパスワードpasswordを入力
 ...
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
@@ -1435,7 +1410,7 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 7-3 認証情報の作成
+### 6-3 認証情報の作成
 
 以下コマンドで認証情報を作成します。
 
@@ -1495,7 +1470,7 @@ controller# openstack endpoint create --region RegionOne \
   compute admin http://controller:8774/v2/%\(tenant_id\)s
 ```
 
-### 7-4 パッケージのインストール
+### 6-4 パッケージのインストール
 
 apt-getコマンドでNova関連のパッケージをインストールします。
 
@@ -1506,7 +1481,7 @@ nova-scheduler python-novaclient
 
 <!-- BREAK -->
 
-### 7-5 Novaの設定を変更
+### 6-5 Novaの設定を変更
 
 nova.confに下記の設定を追記します。
 
@@ -1528,7 +1503,7 @@ enabled_apis=ec2,osapi_compute,metadata
 rpc_backend = rabbit        ←追記
 auth_strategy = keystone    ←追記
 
-# controllerノードのIPアドレス:10.0.0.101
+# コントローラーノードのIPアドレス:10.0.0.101
 my_ip = 10.0.0.101                          ←追記
 
 network_api_class = nova.network.neutronv2.api.API
@@ -1551,7 +1526,7 @@ vncserver_proxyclient_address = 10.0.0.101  ←追記
 ...
 (↓これ以下追記↓)
 [database]
-connection = mysql+pymysql://nova:password@sql/nova
+connection = mysql+pymysql://nova:password@controller/nova
 
 [oslo_messaging_rabbit]rabbit_host = controller
 rabbit_userid = openstack
@@ -1574,7 +1549,7 @@ controller# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 <!-- BREAK -->
 
-### 7-6 データベースにデータを作成
+### 6-6 データベースにデータを作成
 
 下記コマンドにてnovaデータベースのセットアップを行います。
 
@@ -1582,7 +1557,7 @@ controller# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 controller# su -s /bin/sh -c "nova-manage db sync" nova
 ```
 
-### 7-7 Novaサービスの再起動
+### 6-7 Novaサービスの再起動
 
 設定を反映させるため、Novaのサービスを再起動します。
 
@@ -1592,7 +1567,7 @@ service nova-consoleauth restart && service nova-scheduler restart && \
 service nova-conductor restart && service nova-novncproxy restart
 ```
 
-### 7-8 使用しないデータベースファイル削除
+### 6-8 使用しないデータベースファイル削除
 
 データベースはMariaDBを使用するため、使用しないSQLiteファイルを削除します。
 
@@ -1600,7 +1575,7 @@ service nova-conductor restart && service nova-novncproxy restart
 controller# rm /var/lib/nova/nova.sqlite
 ```
 
-### 7-9 Glanceとの通信確認
+### 6-9 Glanceとの通信確認
 
 NovaのコマンドラインインターフェースでGlanceと通信してGlanceと相互に通信できているかを確認します。
 
@@ -1618,18 +1593,18 @@ controller# nova image-list
 <!-- BREAK -->
 
 
-## 8. Nova-Computeのインストール・設定（コンピュートノード）
+## 7. Nova-Computeのインストール・設定（コンピュートノード）
 
 ここまでコントローラーノードの環境構築を行ってきましたが、ここでコンピュートノードに切り替えて設定を行います。
 
-### 8-1 パッケージのインストール
+### 7-1 パッケージのインストール
 
 ```
 compute# apt-get update
 compute# apt-get install -y nova-compute sysfsutils
 ```
 
-### 8-2 Novaの設定を変更
+### 7-2 Novaの設定を変更
 
 novaの設定ファイルを変更します。
 
@@ -1704,7 +1679,7 @@ virt_type = kvm
 
 <!-- BREAK -->
 
-### 8-3 Novaコンピュートサービスの再起動
+### 7-3 Novaコンピュートサービスの再起動
 
 設定を反映させるため、Nova-Computeのサービスを再起動します。
 
@@ -1712,7 +1687,7 @@ virt_type = kvm
 compute# service nova-compute restart
 ```
 
-### 8-4 コントローラーノードとの疎通確認
+### 7-4 コントローラーノードとの疎通確認
 
 疎通確認はコントローラーノード上にて、admin環境変数設定ファイルを読み込んで行います。
 
@@ -1720,9 +1695,9 @@ compute# service nova-compute restart
 controller# source admin-openrc.sh
 ```
 
-#### 8-4-1 ホストリストの確認
+#### 7-4-1 ホストリストの確認
 
-controllerノードとcomputeノードが相互に接続できているか確認します。もし、StateがXXXなサービスがあった場合は、該当のサービスのログを確認して対処してください。
+コントローラーノードとコンピュートノードが相互に接続できているか確認します。もし、StateがXXXなサービスがあった場合は、該当のサービスのログを確認して対処してください。
 
 ```
 controller# openstack compute service list -c Binary -c Host -c State
@@ -1739,9 +1714,9 @@ controller# openstack compute service list -c Binary -c Host -c State
 ※一覧にcomputeが表示されていれば問題ありません。Stateがupでないサービスがある場合は-cオプションを外して確認します。
 
 
-#### 8-4-2 ハイパーバイザの確認
+#### 7-4-2 ハイパーバイザの確認
 
-controllerノードよりcomputeノードのハイパーバイザが取得可能か確認します。
+コントローラーノードよりコンピュートノードのハイパーバイザが取得可能か確認します。
 
 ```
 controller# openstack hypervisor list
@@ -1757,14 +1732,14 @@ controller# openstack hypervisor list
 <!-- BREAK -->
 
 
-## 9. Neutronのインストール・設定（コントローラーノード）
+## 8. Neutronのインストール・設定（コントローラーノード）
 
-### 9-1 データベースを作成
+### 8-1 データベースを作成
 
 MariaDBにデータベースneutronを作成します。
 
 ```
-sql# mysql -u root -p << EOF
+controller# mysql -u root -p << EOF
 CREATE DATABASE neutron;
 GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'localhost' \
   IDENTIFIED BY 'password';
@@ -1774,7 +1749,7 @@ EOF
 Enter password: ← MariaDBのrootパスワードpasswordを入力
 ```
 
-### 9-2 データベースの確認
+### 8-2 データベースの確認
 
 MariaDBにNeutronのデータベースが登録されたか確認します。
 
@@ -1800,7 +1775,7 @@ MariaDB [(none)]> show databases;
 
 <!-- BREAK -->
 
-### 9-3 認証情報の設定
+### 8-3 認証情報の設定
 
 以下コマンドで認証情報を設定します。
 
@@ -1863,7 +1838,7 @@ controller# openstack endpoint create --region RegionOne \
 <!-- BREAK -->
 
 
-### 9-4 パッケージのインストール
+### 8-4 パッケージのインストール
 
 本書ではネットワークの構成は公式マニュアルの「[Networking Option 2: Self-service networks](http://docs.openstack.org/liberty/install-guide-ubuntu/neutron-controller-install-option2.html)」の方法で構築する例を示します。
 
@@ -1874,7 +1849,7 @@ controller# apt-get install neutron-server neutron-plugin-ml2 \
  neutron-metadata-agent python-neutronclient
 ```
 
-### 9-5 Neutronコンポーネントの設定を変更
+### 8-5 Neutronコンポーネントの設定を変更
 
 + Neutronサーバーの設定
 
@@ -1889,7 +1864,7 @@ notify_nova_on_port_status_changes = True   ←アンコメントnotify_nova_on
 
 [database]
 #connection = sqlite:////var/lib/neutron/neutron.sqlite  ← 既存設定をコメントアウト
-connection = mysql+pymysql://neutron:password@sql/neutron  ← 追記
+connection = mysql+pymysql://neutron:password@controller/neutron  ← 追記
 
 [keystone_authtoken]（既存の設定はコメントアウトし、以下を追記）
 ...
@@ -2090,7 +2065,7 @@ controller# less /etc/neutron/metadata_agent.ini | grep -v "^\s*$" | grep -v "^\
 
 <!-- BREAK -->
 
-### 9-6 Novaの設定を変更
+### 8-6 Novaの設定を変更
 
 Novaの設定ファイルにNeutronの設定を追記します。
 
@@ -2120,7 +2095,7 @@ METADATA_SECRETはMetadataエージェントで指定した値に置き換えま
 controller# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-### 9-7 データベースの作成
+### 8-7 データベースの作成
 
 コマンドを実行して、エラーがでないで完了することを確認します。
 
@@ -2139,9 +2114,9 @@ INFO  [alembic.runtime.migration] Running upgrade c40fbb377ad -> 4b47ea298795, a
 
 <!-- BREAK -->
 
-### 9-8 コントローラーノードのNeutronと関連サービスの再起動
+### 8-8 コントローラーノードのNeutronと関連サービスの再起動
 
-設定を反映させるため、controllerノードの関連サービスを再起動します。
+設定を反映させるため、コントローラーノードの関連サービスを再起動します。
 
 まずNova APIサービスを再起動します。
 
@@ -2155,7 +2130,7 @@ controller# service nova-api restart
 controller# service neutron-server restart && service neutron-plugin-linuxbridge-agent restart && service neutron-dhcp-agent restart && service neutron-metadata-agent restart && service neutron-l3-agent restart
 ```
 
-### 9-9 ログの確認
+### 8-9 ログの確認
 
 ログを確認して、エラーが出力されていないことを確認します。
 
@@ -2166,7 +2141,7 @@ controller# tailf neutron-metadata-agent.log
 controller# tailf neutron-plugin-linuxbridge-agent.log
 ```
 
-### 9-10 使用しないデータベースファイル削除
+### 8-10 使用しないデータベースファイル削除
 
 ```
 controller# rm /var/lib/neutron/neutron.sqlite
@@ -2174,18 +2149,18 @@ controller# rm /var/lib/neutron/neutron.sqlite
 
 <!-- BREAK -->
 
-## 10. Neutronのインストール・設定（コンピュートノード）
+## 9. Neutronのインストール・設定（コンピュートノード）
 
 次にコンピュートノードの設定を行います。
 
-### 10-1 パッケージのインストール
+### 9-1 パッケージのインストール
 
 ```
 compute# apt-get update
 compute# apt-get install neutron-plugin-linuxbridge-agent
 ```
 
-### 10-2 設定の変更
+### 9-2 設定の変更
 
 + Neutronの設定
 
@@ -2257,7 +2232,7 @@ compute# less /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v "^\s*$" |
 
 <!-- BREAK -->
 
-### 10-3 コンピュートノードのネットワーク設定
+### 9-3 コンピュートノードのネットワーク設定
 
 Novaの設定ファイルの内容をNeutronを利用するように変更します。
 
@@ -2285,7 +2260,7 @@ compute# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 <!-- BREAK -->
 
-### 10-4 コンピュートノードのNeutronと関連サービスを再起動
+### 9-4 コンピュートノードのNeutronと関連サービスを再起動
 
 ネットワーク設定を反映させるため、コンピュートノードのNeutronと関連のサービスを再起動します。
 
@@ -2293,7 +2268,7 @@ compute# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 compute# service nova-compute restart && service neutron-plugin-linuxbridge-agent restart
 ```
 
-### 10-5 ログの確認
+### 9-5 ログの確認
 
 エラーが出ていないかログを確認します。
 
@@ -2302,7 +2277,7 @@ compute# tailf /var/log/nova/nova-compute.log
 compute# tailf /var/log/neutron/neutron-plugin-linuxbridge-agent.log
 ```
 
-### 10-6 Neutronサービスの動作を確認
+### 9-6 Neutronサービスの動作を確認
 
 `neutron agent-list`コマンドを実行してNeutronエージェントが正しく認識されており、稼働していることを確認します。
 
@@ -2325,11 +2300,11 @@ controller# neutron agent-list -c host -c alive -c binary
 <!-- BREAK -->
 
 
-## 11. 仮想ネットワーク設定（コントローラーノード）
+## 10. 仮想ネットワーク設定（コントローラーノード）
 
-### 11-1 外部接続ネットワークの設定
+### 10-1 外部接続ネットワークの設定
 
-#### 11-1-1 admin環境変数読み込み
+#### 10-1-1 admin環境変数読み込み
 
 外部接続用ネットワーク作成するためにadmin環境変数を読み込みます。
 
@@ -2337,7 +2312,7 @@ controller# neutron agent-list -c host -c alive -c binary
 controller# source admin-openrc.sh
 ```
 
-#### 11-1-2 外部ネットワーク作成
+#### 10-1-2 外部ネットワーク作成
 
 ext-netという名前で外部用ネットワークを作成します。
 
@@ -2366,7 +2341,7 @@ Created a new network:
 
 <!-- BREAK -->
 
-#### 11-1-3 外部ネットワーク用サブネット作成
+#### 10-1-3 外部ネットワーク用サブネット作成
 
 ext-subnetという名前で外部ネットワーク用サブネットを作成します。
 
@@ -2395,9 +2370,9 @@ Created a new subnet:
 +-------------------+----------------------------------------------------+
 ```
 
-### 11-2 インスタンス用ネットワーク設定
+### 10-2 インスタンス用ネットワーク設定
 
-#### 11-2-1 demo環境変数読み込み
+#### 10-2-1 demo環境変数読み込み
 
 インスタンス用ネットワーク作成するためにdemo環境変数読み込みます。
 
@@ -2407,7 +2382,7 @@ controller# source demo-openrc.sh
 
 <!-- BREAK -->
 
-#### 11-2-2 インスタンス用ネットワーク作成
+#### 10-2-2 インスタンス用ネットワーク作成
 
 demo-netという名前でインスタンス用ネットワークを作成します。
 
@@ -2430,7 +2405,7 @@ Created a new network:
 +-----------------------+--------------------------------------+
 ```
 
-#### 11-2-3 インスタンス用ネットワークサブネット作成
+#### 10-2-3 インスタンス用ネットワークサブネット作成
 
 demo-subnetという名前でインスタンス用ネットワークサブネットを作成します。
 
@@ -2459,12 +2434,12 @@ Created a new subnet:
 
 <!-- BREAK -->
 
-### 11-3 仮想ネットワークルーター設定
+### 10-3 仮想ネットワークルーター設定
 
 仮想ネットワークルーターを作成して外部接続用ネットワークとインスタンス用ネットワークをルーターに接続し、双方でデータのやり取りを行えるようにします。
 
 
-#### 11-3-1 demo-routerを作成
+#### 10-3-1 demo-routerを作成
 
 仮想ネットワークルータを作成します。
 
@@ -2484,7 +2459,7 @@ Created a new router:
 +-----------------------+--------------------------------------+
 ```
 
-#### 11-3-2 demo-routerにsubnetを追加
+#### 10-3-2 demo-routerにsubnetを追加
 
 仮想ネットワークルーターにインスタンス用ネットワークを接続します。
 
@@ -2493,7 +2468,7 @@ controller(demo)# neutron router-interface-add demo-router demo-subnet
 Added interface 7337070d-455f-406d-8ebd-24dba7deea3a to router demo-router.
 ```
 
-#### 11-3-3 demo-routerにgatewayを追加
+#### 10-3-3 demo-routerにgatewayを追加
 
 仮想ネットワークルーターに外部ネットワークを接続します。
 
@@ -2504,7 +2479,7 @@ Set gateway for router demo-router
 
 <!-- BREAK -->
 
-### 11-4 ネットワークの確認
+### 10-4 ネットワークの確認
 
 ```
 controller(admin)# source admin-openrc.sh
@@ -2539,7 +2514,7 @@ controller(admin)# neutron port-show 9477c16b-e5c2-430b-b4b4-37d415fe9602 -F dev
 ※応答が返ってくれば問題ありません。
 
 
-### 11-5 インスタンスの起動確認
+### 10-5 インスタンスの起動確認
 
 OpenStackの最低限の構成ができあがったので、ここでOpenStack環境がうまく動作しているか確認しましょう。
 まずはコマンドを使ってインスタンスを起動するために必要な情報を集める所から始めます。環境設定ファイルを読み込んで、各コマンドを実行し、情報を集めてください。
@@ -2610,14 +2585,14 @@ Request to delete server vm1 has been accepted.
 
 <!-- BREAK -->
 
-## 12. Cinderインストール（コントローラーノード）
+## 11. Cinderインストール（コントローラーノード）
 
-### 12-1 データベース作成
+### 11-1 データベース作成
 
 MariaDBのデータベースにCinderのデータベースを作成します。
 
 ```
-sql# mysql -u root -p << EOF
+controller# mysql -u root -p << EOF
 CREATE DATABASE cinder;
 GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' \
   IDENTIFIED BY 'password';
@@ -2627,12 +2602,12 @@ EOF
 Enter password: ← MariaDBのrootパスワードpasswordを入力
 ```
 
-#### 12-2 データベースの確認
+#### 11-2 データベースの確認
 
 MariaDBにCinderのデータベースが登録されたか確認します。
 
 ```
-sql# mysql -u cinder -p
+controller# mysql -u cinder -p
 Enter password: ← MariaDBのcinderパスワードpasswordを入力
 ...
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
@@ -2652,7 +2627,7 @@ MariaDB [(none)]> show databases;
 <!-- BREAK -->
 
 
-### 12-3 認証情報の設定
+### 11-3 認証情報の設定
 
 以下コマンドで認証情報を設定します。
 
@@ -2737,7 +2712,7 @@ controller# openstack endpoint create --region RegionOne \
 <!-- BREAK -->
 
 
-### 12-4 パッケージインストール
+### 11-4 パッケージインストール
 
 本書ではBlock StorageコントローラーとBlock Storageボリュームコンポーネントを一台のマシンで構築するため、両方の役割をインストールします。
 
@@ -2747,7 +2722,7 @@ controller# apt-get install -y lvm2 cinder-api cinder-scheduler cinder-volume py
 ```
 
 
-### 12-5 Cinderの設定を変更
+### 11-5 Cinderの設定を変更
 
 ```
 controller# vi /etc/cinder/cinder.conf
@@ -2770,7 +2745,7 @@ glance_host = controller
 [oslo_concurrency]lock_path = /var/lib/cinder/tmp
 
 [database]
-connection = mysql+pymysql://cinder:password@sql/cinder
+connection = mysql+pymysql://cinder:password@controller/cinder
 
 [keystone_authtoken]auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = cinderpassword = password       ← cinderユーザーのパスワード(12-2で設定したもの)
 
@@ -2785,13 +2760,13 @@ controller# less /etc/cinder/cinder.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 <!-- BREAK -->
 
-### 12-6 データベースに表を作成
+### 11-6 データベースに表を作成
 
 ```
 controller# su -s /bin/sh -c "cinder-manage db sync" cinder
 ```
 
-### 12-7 Cinderサービスの再起動
+### 11-7 Cinderサービスの再起動
 
 設定を反映させるために、Cinderのサービスを再起動します。
 
@@ -2799,7 +2774,7 @@ controller# su -s /bin/sh -c "cinder-manage db sync" cinder
 controller# service cinder-scheduler restart && service cinder-api restart
 ```
 
-### 12-8 使用しないデータベースファイルを削除
+### 11-8 使用しないデータベースファイルを削除
 
 ```
 controller# rm /var/lib/cinder/cinder.sqlite
@@ -2807,11 +2782,11 @@ controller# rm /var/lib/cinder/cinder.sqlite
 
 <!-- BREAK -->
 
-### 12-9 イメージ格納用ボリュームの作成
+### 11-9 イメージ格納用ボリュームの作成
 
 イメージ格納用ボリュームを設定するために物理ボリュームの設定、ボリュームの作成を行います。
 
-#### 12-9-1 物理ボリュームを追加
+#### 11-9-1 物理ボリュームを追加
 
 本書ではコントローラーノードにハードディスクを追加して、そのボリュームをCinder用ボリュームとして使います。コントローラーノードを一旦シャットダウンしてからハードディスクを増設し、再起動してください。新しい増設したディスクはdmesgコマンドなどを使って確認できます。
 
@@ -2823,7 +2798,7 @@ controller# # dmesg |grep sd|grep "logical blocks"
 
 仮想マシンにハードディスクを増設した場合は/dev/vdbなどのようにデバイス名が異なる場合があります。
 
-#### 12-9-2 物理ボリュームを設定
+#### 11-9-2 物理ボリュームを設定
 
 以下コマンドで物理ボリュームを作成します。
 
@@ -2850,7 +2825,7 @@ filter = [ "a/sdb/", "r/.*/"]
 ```
 
 
-#### 12-9-3 Cinder-Volumeサービスの再起動
+#### 11-9-3 Cinder-Volumeサービスの再起動
 
 Cinderストレージの設定を反映させるために、Cinder-Volumeのサービスを再起動します。
 
@@ -2858,7 +2833,7 @@ Cinderストレージの設定を反映させるために、Cinder-Volumeのサ�
 controller# service cinder-volume restart && service tgt restart
 ```
 
-#### 12-9-4 admin環境変数設定ファイルを読み込み
+#### 11-9-4 admin環境変数設定ファイルを読み込み
 
 adminのみ実行可能なコマンドを実行するために、admin環境変数を読み込みます。
 
@@ -2868,7 +2843,7 @@ controller# source admin-openrc.sh
 
 <!-- BREAK -->
 
-#### 12-9-5 Cinderサービスの確認
+#### 11-9-5 Cinderサービスの確認
 
 以下コマンドでCinderサービスの一覧を表示し、正常に動作していることを確認します。
 
@@ -2883,7 +2858,7 @@ controller# cinder service-list
 +------------------+--------------------+------+---------+-------+----------------------------+-----------------+
 ```
 
-#### 12-9-6 Cinderボリュームの作成を試行
+#### 11-9-6 Cinderボリュームの作成を試行
 
 以下コマンドでCinderボリュームを作成し、正常にCinderが動作していることを確認します。
 
@@ -2901,20 +2876,20 @@ controller# openstack volume list -c "Display Name" -c "Size"
 <!-- BREAK -->
 
 
-## 13. Dashboardインストール・確認（コントローラーノード）
+## 12. Dashboardインストール・確認（コントローラーノード）
 
 クライアントマシンからブラウザーでOpenStack環境を操作可能なWebインターフェイスをインストールします。
 
-### 13-1 パッケージインストール
+### 12-1 パッケージインストール
 
-controllerノードにDashboardをインストールします。
+コントローラーノードにDashboardをインストールします。
 
 ```
 controller# apt-get update
 controller# apt-get install -y openstack-dashboard
 ```
 
-### 13-2 Dashboardの設定を変更
+### 12-2 Dashboardの設定を変更
 
 インストールしたDashboardの設定を変更します。
 
@@ -2955,11 +2930,11 @@ controller# service apache2 reload
 <!-- BREAK -->
 
 
-### 13-3 Dashboardにアクセス
+### 12-3 Dashboardにアクセス
 
-controllerノードとネットワーク的に接続されているマシンからブラウザで以下URLに接続してOpenStackのログイン画面が表示されるか確認します。
+コントローラーノードとネットワーク的に接続されているマシンからブラウザで以下URLに接続してOpenStackのログイン画面が表示されるか確認します。
 
-※ブラウザで接続するマシンは予めDNSもしくは/etc/hostsにcontrollerノードのIPを記述しておく等controllerノードの名前解決を行っておく必要があります。
+※ブラウザで接続するマシンは予めDNSもしくは/etc/hostsにコントローラーノードのIPを記述しておく等コンピュートノードの名前解決を行っておく必要があります。
 
 ```
 http://controller/horizon/
@@ -2970,7 +2945,7 @@ http://controller/horizon/
 
 <!-- BREAK -->
 
-### 13-4 セキュリティグループの設定
+### 12-4 セキュリティグループの設定
 
 OpenStackの上で動かすインスタンスのファイアウォール設定は、セキュリティグループで行います。ログイン後、次の手順でセキュリティグループを設定できます。
 
@@ -2982,7 +2957,7 @@ OpenStackの上で動かすインスタンスのファイアウォール設定�
 
 セキュリティーグループは複数作成できます。作成したセキュリティーグループをインスタンスを起動する際に選択することで、セキュリティグループで定義したポートを解放したり、拒否したり、接続できるクライアントを制限することができます。
 
-### 13-5 キーペアの作成
+### 12-5 キーペアの作成
 
 OpenStackではインスタンスへのアクセスはデフォルトで公開鍵認証方式で行います。次の手順でキーペアを作成できます。
 
@@ -3002,7 +2977,7 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 
 <!-- BREAK -->
 
-### 13-6 インスタンスの起動
+### 12-6 インスタンスの起動
 
 前の手順でGlanceにCirrOSイメージを登録していますので、早速構築したOpenStack環境上でインスタンスを起動してみましょう。
 
@@ -3016,7 +2991,7 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 8.高度な設定タブでパーティションなどの構成を設定（オプション）<br>
 9.右下の「起動」ボタンをクリック<br>
 
-### 13-7 Floating IPの設定
+### 12-7 Floating IPの設定
 
 起動したインスタンスにFloating IPアドレスを設定することで、Dashboardのコンソール以外からインスタンスにアクセスできるようになります。インスタンスにFloating IPを割り当てるには次の手順で行います。
 
@@ -3030,7 +3005,7 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 
 <!-- BREAK -->
 
-### 13-8 インスタンスへのアクセス
+### 12コントローラーノード-8 インスタンスへのアクセス
 
 Floating IPを割り当てて、かつセキュリティグループの設定を適切に行っていれば、リモートアクセスできるようになります。セキュリティーグループでSSHを許可した場合、端末からSSH接続が可能になります（下記は実行例）。
 
