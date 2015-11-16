@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:0.9.1
+Version:0.9.2
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：0.9.1 (2015/11/13作成)<br>
+バージョン：0.9.2 (2015/11/16作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -17,6 +17,7 @@ Version:0.9.1
 |:---|:---|:---|
 |0.9.0|2015/11/02|Liberty版執筆開始|
 |0.9.1|2015/11/13|Liberty版Beta1|
+|0.9.2|2015/11/16|Liberty版Beta2:誤記、表記ゆれの修正および不要項目の削除|
 
 
 ````
@@ -34,7 +35,7 @@ https://github.com/virtualtech/openstack-liberty-docs/issues
 
 #Part.1 OpenStack 構築編
 <br>
-本章は、OpenStack Foundationが公開している公式ドキュメント「OpenStack Installation Guide for Ubuntu 14.04」の内容から、「Block Storage Service」までの構築手順を翻訳したものです。
+本章は、OpenStack Foundationが公開している公式ドキュメント「OpenStack Installation Guide for Ubuntu 14.04」の内容から、「Block Storage Service」までの構築手順をベースに加筆したものです。
 OpenStackをUbuntu Server 14.04 ベースで構築する手順を解説しています。
 Canonical社が提供するCloud Archiveリポジトリーを使って、OpenStackの最新版Libertyを導入しましょう。
 
@@ -83,26 +84,13 @@ MariaDB       | RabbitMQ       | Linux KVM
 
 ### 1-3 ネットワークセグメントの設定
 
-今回は2つのネットワークセグメントを用意し構成しています。
-
-+ 内部ネットワーク(Instance Tunnels)
-  ネットワークノードとコンピュートノード間のトンネル用に使用するネットワーク。インターネットへの接続は行えなくても構いません。
-
-+ 外部ネットワーク(Management)
-  外部との接続に使用するネットワーク。構築中はaptコマンドを使って外部リポジトリからパッケージなどをダウンロードするため、インターネット接続が必要となります。
-
-OpenStack稼働後は、仮想マシンインスタンスに対しFloating IPアドレスを割り当てることで、外部ネットワークへ接続することができます。
-
-なお、各種APIを外部公開する際にも使用できますが、今回の手順ではAPIの公開は行いません。
-
 IPアドレスは以下の構成で構築されている前提で解説します。
 
-|-|外部ネットワーク|内部ネットワーク|
+|インターフェース|eth0|
 |:---|:---|:---|
-|インターフェース|eth0|eth1|
-|ネットワーク|10.0.0.0/24|192.168.0.0/24|
-|ゲートウェイ|10.0.0.1|なし|
-|ネームサーバー|10.0.0.1|なし|
+|ネットワーク|10.0.0.0/24|
+|ゲートウェイ|10.0.0.1|
+|ネームサーバー|10.0.0.1|
 
 <!-- BREAK -->
 
@@ -121,21 +109,21 @@ IPアドレスは以下の構成で構築されている前提で解説します
 
 + controllerノード
 
-|インターフェース|eth0|eth1|
+|インターフェース|eth0|
 |:---|:---|:---|
-|IPアドレス|10.0.0.101|192.168.0.101|
-|ネットマスク|255.255.255.0|255.255.255.0|
-|ゲートウェイ|10.0.0.1|なし|
-|ネームサーバー|10.0.0.1|なし|
+|IPアドレス|10.0.0.101|
+|ネットマスク|255.255.255.0|
+|ゲートウェイ|10.0.0.1|
+|ネームサーバー|10.0.0.1|
 
 + computeノード
 
-|インターフェース|eth0|eth1|
+|インターフェース|eth0|
 |:---|:---|:---|
-|IPアドレス|10.0.0.102|192.168.0.103|
-|ネットマスク|255.255.255.0|255.255.255.0|
-|ゲートウェイ|10.0.0.1|なし|
-|ネームサーバー|10.0.0.1|なし|
+|IPアドレス|10.0.0.102|
+|ネットマスク|255.255.255.0|
+|ゲートウェイ|10.0.0.1|
+|ネームサーバー|10.0.0.1|
 
 <!-- BREAK -->
 
@@ -203,6 +191,7 @@ Ubuntu Serverで日本語の言語を設定した場合、標準出力や標準�
 # vi /etc/environment
 http_proxy="http://proxy.example.com:8080/"
 https_proxy="https://proxy.example.com:8080/"
+no_proxy=localhost,controller,compute,sql
 ```
 
 - APTのプロキシー設定
@@ -243,7 +232,7 @@ controller# vi /etc/glance/glance-api.conf ←コマンド冒頭にこのコマ�
 
 [database] ←この見出しから次の見出しまでの間に以下を記述
 #connection = sqlite:////var/lib/glance/glance.sqlite          ← 既存設定をコメントアウト
-connection = mysql://glance:password@controller/glance         ← 追記
+connection = mysql://glance:password@sql/glance         ← 追記
 
 
 [keystone_authtoken] ← 見出し
@@ -302,11 +291,6 @@ iface eth0 inet static
       netmask 255.255.255.0
       gateway 10.0.0.1
       dns-nameservers 10.0.0.1
-
-auto eth1
-iface eth1 inet static
-      address 192.168.0.101
-      netmask 255.255.255.0
 ```
 
 #### 2-1-3 コンピュートノードのIPアドレスの設定
@@ -320,11 +304,6 @@ iface eth0 inet static
       netmask 255.255.255.0
       gateway 10.0.0.1
       dns-nameservers 10.0.0.1
-
-auto eth1
- iface eth1 inet static
-       address 192.168.0.102
-       netmask 255.255.255.0
 ```
 
 #### 2-1-4 ネットワークの設定を反映
@@ -339,13 +318,14 @@ auto eth1
 
 ### 2-2 ホスト名と静的な名前解決の設定
 
-各ノードの/etc/hostsに各ノードのIPアドレスとホスト名を記述します。127.0.1.1の行はコメントアウトします。
+ホスト名でノードにアクセスするにはDNSサーバーで名前解決する方法やhostsファイルに書く方法が挙げられます。
+本書では各ノードの/etc/hostsに各ノードのIPアドレスとホスト名を記述してhostsファイルを使って名前解決します。127.0.1.1の行はコメントアウトします。
 
 #### 2-2-1 各ノードのホスト名の設定
 
 各ノードのホスト名をhostnamectlコマンドを使って設定します。反映させるためには一度ログインしなおす必要があります。
 
-（例）controllerの場合
+（例）コントローラーノードの場合
 
 ```
 # hostnamectl set-hostname controller
@@ -396,7 +376,7 @@ OK
 なお、`apt-get update`は頻繁に実行する必要はありません。日をまたいで作業する際や、コマンドを実行しない場合にパッケージ更新やパッケージのインストールでエラーが出る場合は実行してください。以降の手順では`apt-get update`を省略します。
 
 ```
-# apt-get update && apt-get -y dist-upgrade
+# apt-get update && apt-get dist-upgrade
 ```
 
 
@@ -425,13 +405,7 @@ controller# apt-get install python-openstackclient
 コントローラーノードで公開NTPサーバーと同期するNTPサーバーを構築します。
 適切な公開NTPサーバー(ex.ntp.nict.jp etc..)を指定します。ネットワーク内にNTPサーバーがある場合はそのサーバーを指定します。
 
-```
-# vi /etc/chrony/chrony.conf
-...
-server NTP_SERVER iburst
-```
-
-内容変更した場合は設定を適用するため、NTPサービスを再起動します。
+設定を変更した場合はNTPサービスを再起動します。
 
 ```
 controller# service chrony restart
@@ -441,7 +415,7 @@ controller# service chrony restart
 
 #### 2-5-3 その他ノードの時刻同期サーバーの設定
 
-SQLノードとコンピュートノードでcontrollerノードと同期するNTPサーバーを構築します。
+SQLノードとコンピュートノードでコントローラーノードと同期するNTPサーバーを構築します。
 
 ```
 compute# vi /etc/chrony/chrony.conf
@@ -485,20 +459,18 @@ compute# chronyc sources
 210 Number of sources = 1
 MS Name/IP address         Stratum Poll Reach LastRx Last sample
 ===============================================================================
-^* lib-controller                3   6    77    25   -509us[-1484us] +/-   13ms
+^* controller                3   6    77    25   -509us[-1484us] +/-   13ms
 ```
 
 <!-- BREAK -->
 
 ### 2-6 Python用MySQL/MariaDBクライアントのインストール
 
-コントローラーノードとコンピュートノードでPython用のMySQL/MariaDBクライアントをインストールします。
+コントローラーノードでPython用のMySQL/MariaDBクライアントをインストールします。
 
 ```
 # apt-get install -y python-pymysql
 ```
-
-Python MySQLライブラリーはMariaDBと互換性があります。
 
 <!-- BREAK -->
 
@@ -517,7 +489,7 @@ sql# apt-get install -y mariadb-server
 ```
 
 インストール中にパスワードの入力を要求されますので、MariaDBのrootユーザーに対するパスワードを設定します。
-本例ではパスワードとして「password」を設定します。
+本書ではパスワードとして「password」を設定します。
 
 #### 3-1-2 MariaDBの設定を変更
 
@@ -553,97 +525,13 @@ character-set-server = utf8                 ← 追記
 sql# service mysql restart
 ```
 
-#### 3-1-4 MariaDBデータベースのセキュア化
-
-mysql_secure_installationコマンドを実行すると、データベースのセキュリティを強化できます。必要に応じて設定を行ってください。
-
-+ rootパスワードの入力
-
-```
-sql# mysql_secure_installation
-In order to log into MariaDB to secure it, we'll need the current
-password for the root user.  If you've just installed MariaDB, and
-you haven't set the root password yet, the password will be blank,
-so you should just press enter here.
-Enter current password for root (enter for none):  password　← MariaDBのrootパスワードを入力
-```
-
-+ rootパスワードの変更
-
-```
-Setting the root password ensures that nobody can log into the MariaDB
-root user without the proper authorisation.
-You already have a root password set, so you can safely answer 'n'.
-Change the root password? [Y/n]  n
-```
-
-+ anonymousユーザーの削除
-
-```
-By default, a MariaDB installation has an anonymous user, allowing anyone
-to log into MariaDB without having to have a user account created for
-them.  This is intended only for testing, and to make the installation
-go a bit smoother.  You should remove them before moving into a
-production environment.
-Remove anonymous users? [Y/n]  y
-```
-
-<!-- BREAK -->
-
-+ リモートからのrootログインを禁止
-
-本例ではデータベースの操作は全てsqlノード上で行うことを想定しているため、リモートからのrootログインは禁止に設定します。必要に応じて設定してください。
-
-```
-Normally, root should only be allowed to connect from 'localhost'.  This
-ensures that someone cannot guess at the root password from the network.
-Disallow root login remotely? [Y/n] y
-```
-
-+ testデーターベースの削除
-
-```
-By default, MariaDB comes with a database named 'test' that anyone can
-access.  This is also intended only for testing, and should be removed
-before moving into a production environment.
-Remove test database and access to it? [Y/n] y
-```
-
-+ 権限の再読み出し
-
-```
-Reloading the privilege tables will ensure that all changes made so far
-will take effect immediately.
-Reload privilege tables now? [Y/n] y
-....
-Thanks for using MariaDB!
-```
-
-<!-- BREAK -->
-
-
-#### 3-1-5 MariaDBクライアントのインストール
+#### 3-1-4 MariaDBクライアントのインストール
 
 SQLノード以外のノードに、インストール済みのMariaDBと同様のバージョンのMariaDBクライアントをインストールします。
 
 ````
 # apt-get install -y mariadb-client-5.5 mariadb-client-core-5.5
 ````
-
-### 3-2 mytopのインストール
-
-データベースの状態を確認するため、データベースパフォーマンスモニターツールのmytopをインストールします。
-
-```
-sql# apt-get install -y mytop
-```
-
-利用するには、sqlノードで次のように実行します。ロードアベレージやデータのin/outなどの情報を確認できます。
-
-```
-sql# mytop --prompt
-Password: password   　← MariaDBのrootパスワードを入力
-```
 
 <!-- BREAK -->
 
@@ -670,7 +558,7 @@ rabbitmq-server:
         500 http://ubuntu-cloud.archive.canonical.com/ubuntu/ trusty-updates/liberty/main amd64 Packages
      3.2.4-1 0
         500 http://ja.archive.ubuntu.com/ubuntu/ trusty/main amd64 Packages
-controller# apt-get install -y rabbitmq-server=3.2.4-1  ← 11/4/2015 時点の最新版
+controller# apt-get install -y rabbitmq-server=3.2.4-1  ← 11/16/2015 時点の最新版
 controller# apt-mark hold rabbitmq-server               ← バージョンを固定
 ```
 
@@ -699,16 +587,6 @@ RABBITMQ_NODE_PORT=5672
 HOSTNAME=controller
 ```
 
-以下の設定ファイルを作成し、localhost以外からもRabbitMQへアクセスできるように設定します。
-
-+ リモート認証の許可
-
-```
-controller# vi /etc/rabbitmq/rabbitmq.conf
-
-[{rabbit, [{loopback_users, []}]}].
-```
-
 <!-- BREAK -->
 
 #### 4-1-4 RabbitMQサービス再起動と確認
@@ -728,23 +606,6 @@ Server startup complete; 0 plugins started.
 ```
 
 ※新たなエラーが表示されなければ問題ありません。
-
-+ デフォルトユーザーguestでRabbitMQのWeb管理画面にアクセス
-
-次のように実行して、RabbitMQの管理画面を有効化します。
-
-```
-controller# rabbitmq-plugins enable rabbitmq_management
-controller# service rabbitmq-server restart
-```
-
-ブラウザーで下記URLの管理画面にアクセスします。ユーザー:guest パスワード:guestでログインできればRabbitMQサーバー自体は正常です。
-
-```
-http://controller-node-ipaddress:15672
-```
-
-作成したopenstackユーザーでリモートからRabbitMQの管理画面にログインできないのは正常です。これはopenstackユーザーにadministrator権限が振られていないためです。ユーザー権限は「rabbitmqctl list_users」コマンドで確認、任意のユーザーに管理権限を設定するには「rabbitmqctl set_user_tags openstack administrator」のように実行するとログイン可能になります。
 
 <!-- BREAK -->
 
@@ -766,6 +627,7 @@ export OS_USERNAME=admin
 export OS_PASSWORD=password
 export OS_AUTH_URL=http://controller:35357/v3
 export OS_IDENTITY_API_VERSION=3
+export OS_IMAGE_API_VERSION=2
 export PS1='\u@\h \W(admin)\$ '
 ```
 
@@ -784,6 +646,7 @@ export OS_USERNAME=demo
 export OS_PASSWORD=password
 export OS_AUTH_URL=http://controller:5000/v3
 export OS_IDENTITY_API_VERSION=3
+export OS_IMAGE_API_VERSION=2
 export PS1='\u@\h \W(demo)\$ '
 ```
 
@@ -848,7 +711,7 @@ Keystoneのインストール時にサービスの自動起動が行われない
 controller# echo "manual" > /etc/init/keystone.override
 ```
 
-apt-getコマンドでkeystoneパッケージをインストールします。
+apt-getコマンドでkeystoneおよび必要なパッケージをインストールします。
 
 ```
 controller# apt-get install -y keystone apache2 libapache2-mod-wsgi memcached python-memcache
@@ -866,7 +729,6 @@ controller# vi /etc/keystone/keystone.conf
 [DEFAULT]
 admin_token = 45742a05a541f26ddee8   ← 追記(5-1-3で出力されたキーを入力)
 log_dir = /var/log/keystone          ← 設定されていることを確認
-verbose = True        ← 追記(詳細なログを出力する)
 ...
 [database]
 #connection = sqlite:////var/lib/keystone/keystone.db    ← 既存設定をコメントアウト
@@ -1037,7 +899,7 @@ controller# openstack project create --domain default \
 
 ```
 controller# openstack user create --domain default --password-prompt admin
-User Password: password  #adminユーザーのパスワードを設定(本例はpasswordを設定)
+User Password: password  #adminユーザーのパスワードを設定(本書はpasswordを設定)
 Repeat User Password: password
 +-----------+----------------------------------+
 | Field     | Value                            |
@@ -1105,7 +967,7 @@ controller# openstack project create --domain default \
 ```
 controller# openstack user create --domain default \
  --password-prompt demo
-User Password: password  #demoユーザーのパスワードを設定(本例はpasswordを設定)
+User Password: password  #demoユーザーのパスワードを設定(本書はpasswordを設定)
 Repeat User Password: password
 +-----------+----------------------------------+
 | Field     | Value                            |
@@ -1166,7 +1028,7 @@ controller# unset OS_TOKEN OS_URL
 動作確認のためadminおよびdemoテナントに対し認証トークンを要求してみます。
 admin、demoユーザーのパスワードを入力する必要があります。
 
-+ adminユーザーとして、Identity バージョン 2.0 API から管理トークンを要求します。
++ adminユーザーとして管理トークンを要求します。
 
 ```
 controller# openstack --os-auth-url http://controller:35357/v3 \
@@ -1236,7 +1098,7 @@ Password:
 
 <!-- BREAK -->
 
-+ demoユーザーとして、Identity バージョン 3 API から管理トークンを要求します。
++ demoユーザーとして管理トークンを要求します。
 
 ```
 controller# openstack --os-auth-url http://controller:5000/v3 \
@@ -1314,7 +1176,7 @@ controller ~(admin)#
 
 ```
 controller# openstack user create --domain default --password-prompt glance
-User Password: password  #glanceユーザーのパスワードを設定(本例はpasswordを設定)
+User Password: password  #glanceユーザーのパスワードを設定(本書はpasswordを設定)
 Repeat User Password: password
 +-----------+----------------------------------+
 | Field     | Value                            |
@@ -1458,7 +1320,7 @@ controller# su -s /bin/sh -c "glance-manage db_sync" glance
 controller# service glance-registry restart && service glance-api restart
 ```
 
-### 6-8 動作の確認と使用しないデータベースファイルの削除
+### 6-8 ログの確認と使用しないデータベースファイルの削除
 
 サービスの再起動後、ログを参照しGlance RegistryとGlance APIサービスでエラーが起きていないことを確認します。
 
@@ -1477,16 +1339,7 @@ controller# rm /var/lib/glance/glance.sqlite
 
 Glanceへインスタンス用仮想マシンイメージを登録します。ここでは、クラウド環境で主にテスト用途で利用されるLinuxディストリビューションCirrOSを登録します。
 
-#### 6-9-1 環境変数の設定
-
-Image serviceにAPIバージョン2.0でアクセスするため、スクリプトを修正して読み込み直します。
-
-```
-controller# cd
-controller# echo "export OS_IMAGE_API_VERSION=2" | tee -a admin-openrc.sh demo-openrc.shcontroller# source admin-openrc.sh
-```
-
-#### 6-9-2 イメージの取得
+#### 6-9-1 イメージの取得
 
 CirrOSのWebサイトより仮想マシンイメージをダウンロードします。
 
@@ -1496,7 +1349,7 @@ controller# wget http://download.cirros-cloud.net/0.3.4/cirros-0.3.4-x86_64-disk
 
 <!-- BREAK -->
 
-#### 6-9-3 イメージを登録
+#### 6-9-2 イメージを登録
 
 ダウンロードした仮想マシンイメージをGlanceに登録します。
 
@@ -1526,7 +1379,7 @@ controller# glance image-create --name "cirros-0.3.4-x86_64" --file cirros-0.3.4
 +------------------+--------------------------------------+
 ```
 
-#### 6-9-4 イメージの登録を確認
+#### 6-9-3 イメージの登録を確認
 
 仮想マシンイメージが正しく登録されたか確認します。
 
@@ -1596,7 +1449,7 @@ controller# source admin-openrc.sh
 
 ```
 controller# openstack user create --domain default --password-prompt nova
-User Password: password  #novaユーザーのパスワードを設定(本例はpasswordを設定)
+User Password: password  #novaユーザーのパスワードを設定(本書はpasswordを設定)
 Repeat User Password: password
 +-----------+----------------------------------+
 | Field     | Value                            |
@@ -1833,8 +1686,6 @@ host = controller
 compute# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 ```
 
-nova-computeの設定ファイルを開き、KVMを利用するように設定変更します。「egrep -c '(vmx|svm)' /proc/cpuinfo」とコマンドを実行して、0と出たらqemu、0以上の数字が出たらkvmをvirt_typeパラメーターに設定する必要があります。
-
 まず次のようにコマンドを実行し、KVMが動く環境であることを確認します。CPUがVMXもしくはSVM対応であるか、コア数がいくつかを出力しています。0と表示される場合は後述の設定でvirt_type = qemuを設定します。
 
 ```
@@ -1871,7 +1722,7 @@ controller# source admin-openrc.sh
 
 #### 8-4-1 ホストリストの確認
 
-controllerノードとcomputeノードが相互に接続できているか確認します。もし、StateがXXXなサービスがあった場合は、該当のサービスをserviceコマンドで起動してください。
+controllerノードとcomputeノードが相互に接続できているか確認します。もし、StateがXXXなサービスがあった場合は、該当のサービスのログを確認して対処してください。
 
 ```
 controller# openstack compute service list -c Binary -c Host -c State
@@ -1963,7 +1814,7 @@ controller# source admin-openrc.sh
 
 ```
 controller# openstack user create --domain default --password-prompt neutron
-User Password: password  #neutronユーザーのパスワードを設定(本例はpasswordを設定)
+User Password: password  #neutronユーザーのパスワードを設定(本書はpasswordを設定)
 Repeat User Password: password
 +-----------+----------------------------------+
 | Field     | Value                            |
@@ -2014,7 +1865,7 @@ controller# openstack endpoint create --region RegionOne \
 
 ### 9-4 パッケージのインストール
 
-本例ではネットワークの構成は公式マニュアルの「[Networking Option 2: Self-service networks](http://docs.openstack.org/liberty/install-guide-ubuntu/neutron-controller-install-option2.html)」の方法で構築する例を示します。
+本書ではネットワークの構成は公式マニュアルの「[Networking Option 2: Self-service networks](http://docs.openstack.org/liberty/install-guide-ubuntu/neutron-controller-install-option2.html)」の方法で構築する例を示します。
 
 ```
 controller# apt-get update
@@ -2086,7 +1937,7 @@ controller# vi /etc/neutron/plugins/ml2/ml2_conf.ini
 
 [ml2]
 ...
-type_drivers = flat,vlan,vxlan           ← 追記
+type_drivers = flat,vxlan           ← 追記
 tenant_network_types = vxlan             ← 追記
 mechanism_drivers = linuxbridge,l2population   ← 追記
 extension_drivers = port_security              ← 追記
@@ -2114,21 +1965,21 @@ controller# less /etc/neutron/plugins/ml2/ml2_conf.ini | grep -v "^\s*$" | grep 
 
 + Linuxブリッジエージェントの設定
 
-PUBLIC_INTERFACE_NAMEをパブリックネットワークに接続している側のNICを指定します。
+パブリックネットワークに接続している側のNICを指定します。本書ではeth0を指定します。
 
 ```
 controller# vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 
 [linux_bridge]
-physical_interface_mappings = public:PUBLIC_INTERFACE_NAME  ← 追記
+physical_interface_mappings = public:eth0 ← 追記
 ```
 
-OVERLAY_INTERFACE_IP_ADDRESSは、先にPUBLIC_INTERFACE_NAMEを置き換えたNIC側のIPアドレスを設定します。
+local_ipは、先にphysical_interface_mappingに設定したNIC側のIPアドレスを設定します。
 
 ```
 [vxlan]
 enable_vxlan = True                        ← アンコメント
-local_ip = OVERLAY_INTERFACE_IP_ADDRESS    ← 追記
+local_ip = 10.0.0.101                      ← 追記
 l2_population = True                       ← 追記
 ```
 
@@ -2154,7 +2005,7 @@ controller# less /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v "^\s*$
 
 + Layer-3エージェントの設定
 
-external_network_bridgeは単一のエージェントで複数の外部ネットワークを有効にするには値を指定する必要はないため、値を空白にします。
+external_network_bridgeは単一のエージェントで複数の外部ネットワークを有効にするには値を指定してはならないため、値を空白にします。
 
 ```
 # vi /etc/neutron/l3_agent.ini
@@ -2209,9 +2060,9 @@ dhcp-option-force=26,1450
 [DEFAULT]
 #auth_url = http://localhost:5000/v2.0      ← コメントアウト
 auth_region = RegionOne
-#admin_tenant_name = %SERVICE_TENANT_NAME%  ← コメントアウト？
-#admin_user = %SERVICE_USER%                ← コメントアウト？
-#admin_password = %SERVICE_PASSWORD%        ← コメントアウト？
+#admin_tenant_name = %SERVICE_TENANT_NAME%  ← コメントアウト
+#admin_user = %SERVICE_USER%                ← コメントアウト
+#admin_password = %SERVICE_PASSWORD%        ← コメントアウト
 ...
 auth_uri = http://controller:5000           ← これ以下追記
 auth_url = http://controller:35357
@@ -2261,7 +2112,7 @@ service_metadata_proxy = True
 metadata_proxy_shared_secret = METADATA_SECRET
 ```
 
-METADATA_SECRETはMetadata agentで指定した値に置き換えます。
+METADATA_SECRETはMetadataエージェントで指定した値に置き換えます。
 
 次のコマンドを実行して正しく設定を行ったか確認します。
 
@@ -2304,7 +2155,7 @@ controller# service nova-api restart
 controller# service neutron-server restart && service neutron-plugin-linuxbridge-agent restart && service neutron-dhcp-agent restart && service neutron-metadata-agent restart && service neutron-l3-agent restart
 ```
 
-### 9-9 動作の確認
+### 9-9 ログの確認
 
 ログを確認して、エラーが出力されていないことを確認します。
 
@@ -2372,7 +2223,7 @@ compute# less /etc/neutron/neutron.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 + Linuxブリッジエージェントの設定
 
-PUBLIC_INTERFACE_NAMEにはパブリック側のネットワークに接続しているインターフェイスを指定します。OVERLAY_INTERFACE_IP_ADDRESSはパブリック側に接続しているNICに設定しているIPアドレスを指定します。
+PUBLIC_INTERFACE_NAMEにはパブリック側のネットワークに接続しているインターフェイスを指定します。local_ipにはパブリック側に接続しているNICに設定しているIPアドレスを指定します。
 
 追記と書かれていない項目は設定があればアンコメントして設定を変更、なければ追記してください。
 
@@ -2384,7 +2235,7 @@ physical_interface_mappings = public:PUBLIC_INTERFACE_NAME
 
 [vxlan]
 enable_vxlan = True
-local_ip = OVERLAY_INTERFACE_IP_ADDRESS
+local_ip = 10.0.0.102
 l2_population = True
 
 [agent]
@@ -2408,7 +2259,7 @@ compute# less /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v "^\s*$" |
 
 ### 10-3 コンピュートノードのネットワーク設定
 
-デフォルトではComputeはレガシーなネットワークを利用します。Neutronを利用するように設定を変更します。
+Novaの設定ファイルの内容をNeutronを利用するように変更します。
 
 ```
 compute# vi /etc/nova/nova.conf
@@ -2444,6 +2295,8 @@ compute# service nova-compute restart && service neutron-plugin-linuxbridge-agen
 
 ### 10-5 ログの確認
 
+エラーが出ていないかログを確認します。
+
 ```
 compute# tailf /var/log/nova/nova-compute.log
 compute# tailf /var/log/neutron/neutron-plugin-linuxbridge-agent.log
@@ -2468,40 +2321,6 @@ controller# neutron agent-list -c host -c alive -c binary
 ```
 
  ※コントローラーとコンピュートで追加され、neutron-linuxbridge-agentが正常に稼働していることが確認できれば問題ありません。念のためログも確認してください。
-
-<!-- BREAK -->
-
-`neutron ext-list`コマンドを実行して、Neutron Serverが読み込んでいる拡張機能の一覧を出力し、必要なモジュールが読み込まれていることを確認します。
-
-```
-controller# neutron ext-list
-+-----------------------+-----------------------------------------------+
-| alias                 | name                                          |
-+-----------------------+-----------------------------------------------+
-| dns-integration       | DNS Integration                               |
-| ext-gw-mode           | Neutron L3 Configurable external gateway mode |
-| binding               | Port Binding                                  |
-| agent                 | agent                                         |
-| subnet_allocation     | Subnet Allocation                             |
-| l3_agent_scheduler    | L3 Agent Scheduler                            |
-| external-net          | Neutron external network                      |
-| flavors               | Neutron Service Flavors                       |
-| net-mtu               | Network MTU                                   |
-| quotas                | Quota management support                      |
-| l3-ha                 | HA Router extension                           |
-| provider              | Provider Network                              |
-| multi-provider        | Multi Provider Network                        |
-| extraroute            | Neutron Extra Route                           |
-| router                | Neutron L3 Router                             |
-| extra_dhcp_opt        | Neutron Extra DHCP opts                       |
-| security-group        | security-group                                |
-| dhcp_agent_scheduler  | DHCP Agent Scheduler                          |
-| rbac-policies         | RBAC Policies                                 |
-| port-security         | Port Security                                 |
-| allowed-address-pairs | Allowed Address Pairs                         |
-| dvr                   | Distributed Virtual Router                    |
-+-----------------------+-----------------------------------------------+
-```
 
 <!-- BREAK -->
 
@@ -2790,10 +2609,8 @@ Request to delete server vm1 has been accepted.
 ```
 
 <!-- BREAK -->
-<!--11/13ここまで構築完了-->
-<!--11/13ここまで編集完了-->
 
-## 12. Cinderインストール（controllerノード）
+## 12. Cinderインストール（コントローラーノード）
 
 ### 12-1 データベース作成
 
@@ -2849,7 +2666,7 @@ controller# source admin-openrc.sh
 
 ```
 controller# openstack user create --password-prompt cinder
-User Password: password  #cinderユーザーのパスワードを設定(本例はpasswordを設定)
+User Password: password  #cinderユーザーのパスワードを設定(本書はpasswordを設定)
 Repeat User Password: password
 +-----------+----------------------------------+
 | Field     | Value                            |
@@ -2944,7 +2761,7 @@ auth_strategy = keystone      ← 確認
 
 rpc_backend = rabbit
 
-my_ip = 10.0.0.101   #controllerノード
+my_ip = 10.0.0.101   #コントローラーノード
 enabled_backends = lvm
 glance_host = controller
 
@@ -2996,7 +2813,7 @@ controller# rm /var/lib/cinder/cinder.sqlite
 
 #### 12-9-1 物理ボリュームを追加
 
-本例ではcontrollerノードにハードディスクを追加して、そのボリュームをCinder用ボリュームとして使います。controllerノードを一旦シャットダウンしてからハードディスクを増設し、再起動してください。新しい増設したディスクはdmesgコマンドなどを使って確認できます。
+本書ではコントローラーノードにハードディスクを追加して、そのボリュームをCinder用ボリュームとして使います。コントローラーノードを一旦シャットダウンしてからハードディスクを増設し、再起動してください。新しい増設したディスクはdmesgコマンドなどを使って確認できます。
 
 ```
 controller# # dmesg |grep sd|grep "logical blocks"
@@ -3061,8 +2878,8 @@ controller# cinder service-list
 +------------------+--------------------+------+---------+-------+----------------------------+-----------------+
 |      Binary      |        Host        | Zone |  Status | State |         Updated_at         | Disabled Reason |
 +------------------+--------------------+------+---------+-------+----------------------------+-----------------+
-| cinder-scheduler |   lib-controller   | nova | enabled |   up  | 2015-11-13T09:25:51.000000 |        -        |
-|  cinder-volume   | lib-controller@lvm | nova | enabled |   up  | 2015-11-13T09:25:51.000000 |        -        |
+| cinder-scheduler |   controller   | nova | enabled |   up  | 2015-11-13T09:25:51.000000 |        -        |
+|  cinder-volume   | controller@lvm | nova | enabled |   up  | 2015-11-13T09:25:51.000000 |        -        |
 +------------------+--------------------+------+---------+-------+----------------------------+-----------------+
 ```
 
