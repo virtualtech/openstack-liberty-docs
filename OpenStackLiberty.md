@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:0.9.5
+Version:0.9.6
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：0.9.5 (2015/11/16作成)<br>
+バージョン：0.9.6 (2015/11/17作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -21,6 +21,7 @@ Version:0.9.5
 |0.9.3|2015/11/16|Beta3:表記ゆれの修正およびMariaDBをコントローラーノードに移動|
 |0.9.4|2015/11/16|Beta4:Glanceのログの注記の追加と軽微な表現の修正|
 |0.9.5|2015/11/16|Beta5:各所apt-get updateのコマンドを削除、コンピュートのマッピング設定をわかりやすく書き換えた|
+|0.9.6|2015/11/17|RC1:Neutronネットワークとセキュリティグループ部分に加筆|
 
 ````
 筆者注:このドキュメントはKilo版をベースに編集中です。提案や誤りの指摘は
@@ -223,10 +224,12 @@ Ubuntuはデフォルト設定でrootユーザーの利用を許可していな�
 ```
 controller# vi /etc/glance/glance-api.conf ←コマンド冒頭にこのコマンドを実行するホストを記述
 
-[database] ←この見出しから次の見出しまでの間に以下を記述
-#connection = sqlite:////var/lib/glance/glance.sqlite          ← 既存設定をコメントアウト
-connection = mysql://glance:password@controller/glance         ← 追記
+[DEFAULT]
+debug=true                      ← コメントをはずす
 
+[database]
+#connection = sqlite:////var/lib/glance/glance.sqlite   ← 既存設定をコメントアウト
+connection = mysql+pymysql://glance:password@controller/glance   ← 追記
 
 [keystone_authtoken] ← 見出し
 #auth_host = 127.0.0.1 ← 既存設定をコメントアウト
@@ -707,14 +710,14 @@ log_dir = /var/log/keystone          ← 設定されていることを確認
 #connection = sqlite:////var/lib/keystone/keystone.db    ← 既存設定をコメントアウト
 connection = mysql+pymysql://keystone:password@controller/keystone  ← 追記
 ...
-[memcache]...servers = localhost:11211  ← アンコメント
+[memcache]...servers = localhost:11211  ← コメントをはずす
 ...
 [token]
 ...
-provider = uuid            ← アンコメント
+provider = uuid            ← コメントをはずす
 driver = memcache          ← 追記 
 ...
-[revoke]...driver = sql               ← アンコメント
+[revoke]...driver = sql               ← コメントをはずす
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
@@ -1216,7 +1219,7 @@ controller# vi /etc/glance/glance-api.conf
 
 [DEFAULT]
 ...
-notification_driver = noop    ← アンコメント
+notification_driver = noop    ← コメントをはずす
 ...
 [database]
 #sqlite_db = /var/lib/glance/glance.sqlite         ← 既存設定をコメントアウト
@@ -1250,7 +1253,7 @@ controller# vi /etc/glance/glance-registry.conf
 
 [DEFAULT]
 ...
-notification_driver = noop    ← アンコメント
+notification_driver = noop    ← コメントをはずす
 ...
 [database]
 #sqlite_db = /var/lib/glance/glance.sqlite             ← 既存設定をコメントアウト
@@ -1599,7 +1602,7 @@ controller# nova image-list
 <!-- BREAK -->
 
 
-## 7. Nova-Computeのインストール・設定（コンピュートノード）
+## 7. Nova Computeのインストールと設定（コンピュートノード）
 
 ここまでコントローラーノードの環境構築を行ってきましたが、ここでコンピュートノードに切り替えて設定を行います。
 
@@ -1637,7 +1640,13 @@ network_api_class = nova.network.neutronv2.api.API
 security_group_api = neutron
 linuxnet_interface_driver = nova.network.linux_net.NeutronLinuxBridgeInterfaceDriver
 firewall_driver = nova.virt.firewall.NoopFirewallDriver
+（次ページに続きます...）
+```
 
+<!-- BREAK -->
+
+```
+（前ページ/etc/nova/nova.confの続き）
 [vnc]
 enabled = True
 vncserver_listen = 0.0.0.0
@@ -1658,7 +1667,6 @@ host = controller
 
 [oslo_concurrency]lock_path = /var/lib/nova/tmp
 ```
-
 
 次のコマンドを実行して正しく設定を行ったか確認します。
 
@@ -1862,9 +1870,9 @@ controller# vi /etc/neutron/neutron.conf
 
 [DEFAULT]...
 core_plugin = ml2             ←確認service_plugins = router      ←追記allow_overlapping_ips = True  ←変更
-rpc_backend = rabbit          ←アンコメント
-auth_strategy = keystone      ←アンコメント
-notify_nova_on_port_status_changes = True   ←アンコメントnotify_nova_on_port_data_changes = True     ←アンコメントnova_url = http://controller:8774/v2        ←変更
+rpc_backend = rabbit          ←コメントをはずす
+auth_strategy = keystone      ←コメントをはずす
+notify_nova_on_port_status_changes = True   ←コメントをはずすnotify_nova_on_port_data_changes = True     ←コメントをはずすnova_url = http://controller:8774/v2        ←変更
 
 [database]
 #connection = sqlite:////var/lib/neutron/neutron.sqlite  ← 既存設定をコメントアウト
@@ -1931,7 +1939,7 @@ vni_ranges = 1:1000                      ← 追記
 
 [securitygroup]
 ...                                                     
-enable_ipset = True                      ← アンコメント
+enable_ipset = True                      ← コメントをはずす
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
@@ -1957,7 +1965,7 @@ local_ipは、先にphysical_interface_mappingに設定したNIC側のIPアド�
 
 ```
 [vxlan]
-enable_vxlan = True                        ← アンコメント
+enable_vxlan = True                        ← コメントをはずす
 local_ip = 10.0.0.101                      ← 追記
 l2_population = True                       ← 追記
 ```
@@ -1971,7 +1979,7 @@ prevent_arp_spoofing = True         ← 追記
 ...
 [securitygroup]
 ...
-enable_security_group = True        ← アンコメント
+enable_security_group = True        ← コメントをはずす
 firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver 
 ↑ 追記
 ```
@@ -2172,8 +2180,8 @@ compute# vi /etc/neutron/neutron.conf
 
 [DEFAULT]
 ...
-rpc_backend = rabbit                  ← アンコメント
-auth_strategy = keystone              ← アンコメント
+rpc_backend = rabbit                  ← コメントをはずす
+auth_strategy = keystone              ← コメントをはずす
 
 [keystone_authtoken]（既存の設定はコメントアウトし、以下を追記）
 ...auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(9-2で設定したもの)
@@ -2203,7 +2211,7 @@ compute# less /etc/neutron/neutron.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 physical_interface_mappingsにはパブリック側のネットワークに接続しているインターフェイスを指定します。本書ではeth0を指定します。local_ipにはパブリック側に接続しているNICに設定しているIPアドレスを指定します。
 
-追記と書かれていない項目は設定があればアンコメントして設定を変更、なければ追記してください。
+追記と書かれていない項目は設定があればコメントをはずして設定を変更、なければ追記してください。
 
 ```
 compute# vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
@@ -2305,11 +2313,18 @@ controller# neutron agent-list -c host -c alive -c binary
 
 ## 10. 仮想ネットワーク設定（コントローラーノード）
 
-### 10-1 外部接続ネットワークの設定
+OpenStack Neutron環境ができたので、OpenStack内で利用するネットワークを作成します。ネットワークは外部ネットワークと接続するためのパブリックネットワークと、インスタンス間やルーター、内部DHCPサーバー間の通信に利用するインスタンス用ネットワークの二つを作成します。
+
+パブリックネットワークは既存のネットワークから一定の範囲のネットワークをOpenStackに割り当てます。ネットワークのゲートウェイIPアドレス、IPアドレスのセグメントと割り当てるIPアドレスの範囲を決めておく必要があります。例えば192.168.1.0/24というネットワークであればゲートウェイIPアドレスは192.168.1.1か192.168.1.254がよく使われ、Windowsならipconfigコマンド、LinuxやUnixではifconfigコマンドで確認できます。パブリックネットワーク用に割り当てるIPアドレスの範囲については、そのネットワークでDHCPサーバーが動いている場合はDHCPサーバーが配る**IPアドレスの範囲を除いた**ネットワークを切り出して利用するようにしてください。
+
+インスタンスにはインスタンス用ネットワークの範囲のIPアドレスがDHCPサーバーからDHCP Agentを介して割り当てられます。このインスタンスにパブリックネットワークの範囲からFloating IPアドレスを割り当てることで、NAT接続でインスタンスが外部ネットワークとやり取りができるようになります。
+
+
+### 10-1 パブリックネットワークの設定
 
 #### 10-1-1 admin環境変数ファイルの読み込み
 
-パブリックネットワークをadmin権限で作成するためにadmin環境変数を読み込みます。
+まずはFloating IPアドレス割当用のネットワークである、パブリックネットワークをadmin権限で作成するためにadmin環境変数を読み込みます。
 
 ```
 controller# source admin-openrc.sh
@@ -2317,11 +2332,12 @@ controller# source admin-openrc.sh
 
 #### 10-1-2 パブリックネットワークの作成
 
-ext-netと言う名前のパブリックネットワークを作成します。
+ext-netと言う名前でパブリックネットワークを作成します。`provider:physical_network`で指定する設定は`/etc/neutron/plugins/ml2/linuxbridge_agent.ini`の`physical_interface_mappings`に指定した値を設定します。例えばpublic:eth0と設定した場合はpublicを指定します。
 
 ```
 controller(admin)# neutron net-create ext-net --router:external \
- --provider:physical_network public --provider:network_type flat 
+ --provider:physical_network public --provider:network_type flat
+
 Created a new network:
 +---------------------------+--------------------------------------+
 | Field                     | Value                                |
@@ -2346,12 +2362,13 @@ Created a new network:
 
 #### 10-1-3 パブリックネットワーク用サブネットの作成
 
-ext-subnetという名前でパブリックネットワーク用サブネットを作成します。
+ext-subnetという名前でパブリックネットワーク用サブネットを作成します。`allocation-pool`にはFloatingIPアドレスとして利用するネットワークの範囲、`gateway`には指定した範囲のネットワークのゲートウェイIPアドレスとネットワークセグメントを指定します。
 
 ```
 controller(admin)# neutron subnet-create ext-net --name ext-subnet \
   --allocation-pool start=10.0.0.200,end=10.0.0.250 \
   --disable-dhcp --gateway 10.0.0.1 10.0.0.0/24
+
 Created a new subnet:
 +-------------------+----------------------------------------------------+
 | Field             | Value                                              |
@@ -2377,7 +2394,7 @@ Created a new subnet:
 
 #### 10-2-1 demoユーザーと環境変数ファイルの読み込み
 
-インスタンス用ネットワークを作成するためにdemo環境変数を読み込みます。
+次にインスタンス用ネットワークを作成します。インスタンス用ネットワークを作成するためにdemo環境変数を読み込みます。
 
 ```
 controller# source demo-openrc.sh
@@ -2412,6 +2429,12 @@ Created a new network:
 
 demo-subnetという名前でインスタンス用ネットワークサブネットを作成します。
 
+`gateway`には指定したインスタンス用ネットワークのサブネットの範囲から任意のIPアドレスを指定します。第4オクテットとして1を指定したIPアドレスを設定するのが一般的です。ここでは192.168.0.0/24のネットワークをインスタンス用ネットワークとして定義し、ゲートウェイIPとして192.168.0.1を設定しています。
+
+`dns-nameserver`には外部ネットワークに接続する場合に名前引きするためのDNSサーバーを指定します。ここではGoogle Public DNSの`8.8.8.8`を指定していますが、外部の名前解決ができるDNSサーバーであれば何を指定しても構いません。
+
+インスタンス用ネットワーク内でDHCPサーバーが稼働し、インスタンスが起動した時にそのDHCPサーバーが`dns-nameserver`に指定したDNSサーバーと192.168.0.0/24の範囲からIPアドレスを確保してインスタンスに割り当てます。
+
 ```
 controller(demo)# neutron subnet-create demo-net 192.168.0.0/24 \--name demo-subnet --gateway 192.168.0.1 --dns-nameserver 8.8.8.8
 Created a new subnet:
@@ -2440,7 +2463,6 @@ Created a new subnet:
 ### 10-3 仮想ネットワークルーターの設定
 
 仮想ネットワークルーターを作成して外部接続用ネットワークとインスタンス用ネットワークをルーターに接続し、双方でデータのやり取りを行えるようにします。
-
 
 #### 10-3-1 demo-routerを作成
 
@@ -2484,32 +2506,28 @@ Set gateway for router demo-router
 
 ### 10-4 ネットワークの確認
 
+- 仮想ルーターのゲートウェイIPアドレスの確認
+
+`neutron router-port-list`コマンドを実行すると、仮想ルーターのそれぞれのポートに割り当てられたIPアドレスを確認することができます。
+コマンドの実行結果から192.168.0.1がインスタンスネットワーク側ゲートウェイIPアドレス、10.0.0.200がパブリックネットワーク側ゲートウェイIPアドレスであることがわかります。
+
+作成したネットワークの確認のために、外部PCからパブリックネットワーク側ゲートウェイIPアドレスにpingを飛ばしてみましょう。問題なければ仮想ルーターと外部ネットワークとの接続ができていると判断することができます。
+
 ```
 controller(admin)# source admin-openrc.sh
-controller(admin)# neutron port-list -c id -c fixed_ips --max-width 20
-(ネットワークポート一覧の表示)
-+--------------------------+--------------------------+
-| id                       | fixed_ips                |
-+--------------------------+--------------------------+
-| 7337070d-455f-406d-8ebd- | {"subnet_id": "ed0190db- |
-| 24dba7deea3a             | 1f51-40e0-babe-          |
-|                          | 3c71fa541f40",           |
-|                          | "ip_address":            |
-|                          | "192.168.0.1"}           |
-| b14a20ba-5fe9-4953-8a36- | {"subnet_id": "ed0190db- |
-| d18cdfbc64b5             | 1f51-40e0-babe-          |
-|                          | 3c71fa541f40",           |
-|                          | "ip_address":            |
-|                          | "192.168.0.2"}           |
-+--------------------------+--------------------------+
-controller(admin)# neutron port-show 9477c16b-e5c2-430b-b4b4-37d415fe9602 -F device_owner --max-width 24
-(IPアドレス10.0.0.200を持つデバイスを確認)
-+--------------+------------------------+
-| Field        | Value                  |
-+--------------+------------------------+
-| device_owner | network:router_gateway |
-+--------------+------------------------+
-# ping -c 3 10.0.0.200|grep "packet loss"
+controller(admin)# neutron router-port-list demo-router -c fixed_ips --max-width 30
++--------------------------------+
+| fixed_ips                      |
++--------------------------------+
+| {"subnet_id": "ed0190db-       |
+| 1f51-40e0-babe-3c71fa541f40",  |
+| "ip_address": "192.168.0.1"}   |
+| {"subnet_id": "ae350158-4b24-4 |
+| 731-8242-e3069785d322",        |
+| "ip_address": "10.0.0.200"} |
++--------------------------------+
+
+# ping -c3 10.0.0.200|grep "packet loss"
 3 packets transmitted, 3 received, 0% packet loss, time 1999ms
 (ルーターゲートウェイ宛に各ノードからpingコマンドの実行)
 ```
@@ -2517,14 +2535,14 @@ controller(admin)# neutron port-show 9477c16b-e5c2-430b-b4b4-37d415fe9602 -F dev
 ※応答が返ってくれば問題ありません。
 
 
-### 10-5 インスタンスの起動確認
+### 10-5 インスタンスの起動を確認
 
-OpenStackの最低限の構成ができあがったので、ここでOpenStack環境がうまく動作しているか確認しましょう。
+起動イメージ、コンピュート、NeutronネットワークといったOpenStackの最低限の構成ができあがったので、ここでOpenStack環境がうまく動作しているか確認しましょう。
 まずはコマンドを使ってインスタンスを起動するために必要な情報を集める所から始めます。環境設定ファイルを読み込んで、各コマンドを実行し、情報を集めてください。
 
 ```
 controller# source demo-openrc.sh
-controller# openstack image list
+controller(demo)# openstack image list
 (起動イメージ一覧を表示)
 +--------------------------------------+---------------------+
 | ID                                   | Name                |
@@ -2549,7 +2567,7 @@ controller# openstack security group list -c ID -c Name
 | 978dc272-58b0-4a7d-b232-30771e9fa7c2 | default |
 +--------------------------------------+---------+
 
-controller# # openstack flavor list -c Name -c Disk
+controller# openstack flavor list -c Name -c Disk
 (フレーバー一覧を表示)
 +-----------+------+
 | Name      | Disk |
@@ -2565,7 +2583,7 @@ controller# # openstack flavor list -c Name -c Disk
 nova bootコマンドを使って、インスタンスを起動します。正常に起動したらnova deleteコマンドでインスタンスを削除してください。
 
 ```
-controller# nova boot --flavor m1.tiny --image "cirros-0.3.4-x86_64" --nic net-id=858c0fe5-ea00-4426-aa4e-f2a2484b2471 --security-group a66e2962-312f-45a4-bfd3-f86ec69c5582 vm1
+controller# nova boot --flavor m1.tiny --image "cirros-0.3.4-x86_64" --nic net-id=5b6a8b87-fd03-46b5-a968-72bac5091b7c --security-group 978dc272-58b0-4a7d-b232-30771e9fa7c2 vm1
 (インスタンスを起動)
 
 controller# watch nova list
@@ -2920,14 +2938,13 @@ controller# vi /var/www/html/index.html
     <meta http-equiv="refresh" content="3; url=/horizon" />    ← 追記
 ```
 
+<!-- BREAK -->
+
 変更した変更を反映させるため、Apacheとセッションストレージサービスを再起動します。
 
 ```
 controller# service apache2 reload
 ```
-
-<!-- BREAK -->
-
 
 ### 12-3 Dashboardにアクセス
 
@@ -2941,7 +2958,6 @@ http://controller/horizon/
 
 ※上記URLにアクセスしてログイン画面が表示され、ユーザーadminとdemoでログイン（パスワード:password）でログインできれば問題ありません。
 
-
 <!-- BREAK -->
 
 ### 12-4 セキュリティグループの設定
@@ -2953,6 +2969,8 @@ OpenStackの上で動かすインスタンスのファイアウォール設定�
 3.「ルールの管理」ボタンをクリック<br>
 4.「ルールの追加」で許可するルールを定義<br>
 5.「追加」ボタンをクリック<br>
+
+インスタンスに対してPingを実行したい場合はルールとしてすべてのICMPを、インスタンスにSSH接続したい場合はSSHをルールとしてセキュリティグループに追加してください。
 
 セキュリティーグループは複数作成できます。作成したセキュリティーグループをインスタンスを起動する際に選択することで、セキュリティグループで定義したポートを解放したり、拒否したり、接続できるクライアントを制限することができます。
 
@@ -2967,12 +2985,6 @@ OpenStackではインスタンスへのアクセスはデフォルトで公開�
 5.キーペア名を入力<br>
 6.「キーペアの作成」ボタンをクリック<br>
 7.キーペア（拡張子:pem）ファイルをダウンロード<br>
-
-インスタンスにSSH接続する際は、-iオプションでpemファイルを指定します。
-
-```
-client$ ssh -i mykey.pem cloud-user@instance-floating-ip  
-```
 
 <!-- BREAK -->
 
