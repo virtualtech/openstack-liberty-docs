@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:0.9.6
+Version:1.0.0
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：0.9.6 (2015/11/17作成)<br>
+バージョン：1.0.0 (2015/11/17作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -22,9 +22,10 @@ Version:0.9.6
 |0.9.4|2015/11/16|Beta4:Glanceのログの注記の追加と軽微な表現の修正|
 |0.9.5|2015/11/16|Beta5:各所apt-get updateのコマンドを削除、コンピュートのマッピング設定をわかりやすく書き換えた|
 |0.9.6|2015/11/17|RC1:Neutronネットワークとセキュリティグループ部分に加筆|
+|1.0.0|2015/11/17|Liberty版 初版発行|
 
 ````
-筆者注:このドキュメントはKilo版をベースに編集中です。提案や誤りの指摘は
+筆者注:このドキュメントに対する提案や誤りの指摘は
 Issue登録か、日本仮想化技術までメールにてお願いします。
 https://github.com/virtualtech/openstack-liberty-docs/issues
 ````
@@ -50,6 +51,7 @@ Canonical社が提供するCloud Archiveリポジトリーを使って、OpenSta
 本書はCanonicalのUbuntu ServerとCloud Archiveリポジトリーのパッケージを使って、OpenStack Libertyを構築する手順を解説したものです。
 
 Ubuntu Serverでは新しいハードウェアのサポートを積極的に行うディストリビューションです。そのため、Linux KernelのバージョンをTrustyの場合は14.04.2以降のLTSのポイントリリースごとに、スタンダート版のUbuntuと同様のバージョンに置き換えてリリースしています。
+
 - <https://wiki.ubuntu.com/Kernel/LTSEnablementStack>
 
 一般的な利用では特に問題ありませんが、OpenStackとSDNのソリューションを連携した環境を作る場合などに、Linux KernelやOSのバージョンを考慮しなくてはならない場合があります。
