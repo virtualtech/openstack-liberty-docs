@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.0
+Version:1.0.1
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.0 (2015/11/17作成)<br>
+バージョン：1.0.1 (2015/11/27作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -23,7 +23,7 @@ Version:1.0.0
 |0.9.5|2015/11/16|Beta5:各所apt-get updateのコマンドを削除、コンピュートのマッピング設定をわかりやすく書き換えた|
 |0.9.6|2015/11/17|RC1:Neutronネットワークとセキュリティグループ部分に加筆|
 |1.0.0|2015/11/17|Liberty版 初版発行|
-|1.0.1|2015/11/24|UbuntuのKernelのサポート期間について修正|
+|1.0.1|2015/11/27|MariaDBをコントローラーノードに移動したことによる要変更箇所を修正。一部設定変更箇所についての表記を修正|
 
 ````
 筆者注:このドキュメントに対する提案や誤りの指摘は
@@ -488,7 +488,7 @@ controller# vi /etc/mysql/my.cnf
 
 [mysqld]
 #bind-address = 127.0.0.1                   ← 既存設定をコメントアウト
-bind-address = 10.0.0.100                   ← 追記(sqlノードのIPアドレス)
+bind-address = 10.0.0.101                   ← 追記(controllerのIPアドレス)
 default-storage-engine = innodb             ← 追記
 innodb_file_per_table                       ← 追記
 collation-server = utf8_general_ci          ← 追記
@@ -706,7 +706,7 @@ keystoneの設定ファイルを変更します。
 controller# vi /etc/keystone/keystone.conf
 
 [DEFAULT]
-admin_token = 45742a05a541f26ddee8   ← 追記(5-1-3で出力されたキーを入力)
+admin_token = 45742a05a541f26ddee8   ← 追記(4-3で出力されたキーを入力)
 log_dir = /var/log/keystone          ← 設定されていることを確認
 ...
 [database]
@@ -1222,7 +1222,7 @@ controller# vi /etc/glance/glance-api.conf
 
 [DEFAULT]
 ...
-notification_driver = noop    ← コメントをはずす
+notification_driver = noop    ← 追記
 ...
 [database]
 #sqlite_db = /var/lib/glance/glance.sqlite         ← 既存設定をコメントアウト
@@ -1230,8 +1230,8 @@ connection = mysql+pymysql://glance:password@controller/glance   ← 追記
 ...
 [glance_store]
 ...
-default_store =file                                 ← 設定されていることを確認
-filesystem_store_datadir = /var/lib/glance/images/  ← 設定されていることを確認
+default_store =file                                 ← コメントを外す
+filesystem_store_datadir = /var/lib/glance/images/  ← 追記
 ...
 [keystone_authtoken]（既存の設定はコメントアウトし、以下を追記）
 ...
@@ -1256,7 +1256,7 @@ controller# vi /etc/glance/glance-registry.conf
 
 [DEFAULT]
 ...
-notification_driver = noop    ← コメントをはずす
+notification_driver = noop    ← 追記
 ...
 [database]
 #sqlite_db = /var/lib/glance/glance.sqlite             ← 既存設定をコメントアウト
@@ -1264,8 +1264,8 @@ connection = mysql+pymysql://glance:password@controller/glance   ← 追記
 
 [glance_store]
 ...
-default_store =file                                 ← 設定されていることを確認
-filesystem_store_datadir = /var/lib/glance/images/  ← 設定されていることを確認
+default_store =file                                 ← コメントを外す
+filesystem_store_datadir = /var/lib/glance/images/  ← 追記
 
 [keystone_authtoken]（既存の設定はコメントアウトし、以下を追記）
 ...
@@ -1637,7 +1637,7 @@ enabled_apis=ec2,osapi_compute,metadata
 rpc_backend = rabbit
 auth_strategy = keystone
 
-my_ip = 10.0.0.103  ← IPアドレスで指定
+my_ip = 10.0.0.102  ← IPアドレスで指定
 
 network_api_class = nova.network.neutronv2.api.API
 security_group_api = neutron
@@ -1653,7 +1653,7 @@ firewall_driver = nova.virt.firewall.NoopFirewallDriver
 [vnc]
 enabled = True
 vncserver_listen = 0.0.0.0
-vncserver_proxyclient_address = 10.0.0.103  ← IPアドレスで指定
+vncserver_proxyclient_address = 10.0.0.102  ← IPアドレスで指定
 novncproxy_base_url = http://controller:6080/vnc_auto.html
 vnc_keymap = ja                             ← 日本語キーボードの設定
 
@@ -1770,7 +1770,7 @@ Enter password: ← MariaDBのrootパスワードpasswordを入力
 MariaDBにNeutronのデータベースが登録されたか確認します。
 
 ```
-controller# mysql -h sql -u neutron -p
+controller# mysql -u neutron -p
 Enter password: ← MariaDBのneutronパスワードpasswordを入力
 ...
 
@@ -1872,10 +1872,10 @@ controller# apt-get install neutron-server neutron-plugin-ml2 \
 controller# vi /etc/neutron/neutron.conf 
 
 [DEFAULT]...
-core_plugin = ml2             ←確認service_plugins = router      ←追記allow_overlapping_ips = True  ←変更
-rpc_backend = rabbit          ←コメントをはずす
-auth_strategy = keystone      ←コメントをはずす
-notify_nova_on_port_status_changes = True   ←コメントをはずすnotify_nova_on_port_data_changes = True     ←コメントをはずすnova_url = http://controller:8774/v2        ←変更
+core_plugin = ml2             ← 確認service_plugins = router      ← 追記allow_overlapping_ips = True  ← 追記
+rpc_backend = rabbit          ← コメントをはずす
+auth_strategy = keystone      ← コメントをはずす
+notify_nova_on_port_status_changes = True   ← コメントをはずすnotify_nova_on_port_data_changes = True     ← コメントをはずすnova_url = http://controller:8774/v2        ← 追記
 
 [database]
 #connection = sqlite:////var/lib/neutron/neutron.sqlite  ← 既存設定をコメントアウト
@@ -2812,7 +2812,7 @@ controller# rm /var/lib/cinder/cinder.sqlite
 本書ではコントローラーノードにハードディスクを追加して、そのボリュームをCinder用ボリュームとして使います。コントローラーノードを一旦シャットダウンしてからハードディスクを増設し、再起動してください。新しい増設したディスクはdmesgコマンドなどを使って確認できます。
 
 ```
-controller# # dmesg |grep sd|grep "logical blocks"
+controller# dmesg |grep sd|grep "logical blocks"
 [    1.361779] sd 2:0:0:0: [sda] 62914560 512-byte logical blocks: (32.2 GB/30.0 GiB)  ← システムディスク
 [    1.362105] sd 2:0:1:0: [sdb] 33554432 512-byte logical blocks: (17.1 GB/16.0 GiB)  ← 追加ディスク
 ```
