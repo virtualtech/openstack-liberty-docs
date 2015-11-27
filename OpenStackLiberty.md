@@ -2254,7 +2254,6 @@ Novaの設定ファイルの内容をNeutronを利用するように変更しま
 compute# vi /etc/nova/nova.conf
 
 [neutron]
-...
 url = http://controller:9696
 auth_url = http://controller:35357
 auth_plugin = password
