@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.1
+Version:1.0.2
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.1 (2015/11/27作成)<br>
+バージョン：1.0.2 (2015/12/04作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -24,6 +24,7 @@ Version:1.0.1
 |0.9.6|2015/11/17|RC1:Neutronネットワークとセキュリティグループ部分に加筆|
 |1.0.0|2015/11/17|Liberty版 初版発行|
 |1.0.1|2015/11/27|MariaDBをコントローラーノードに移動したことによる要変更箇所を修正。一部設定変更箇所についての表記を修正|
+|1.0.2|2015/12/04|依存エラーを解決するための対応|
 
 ````
 筆者注:このドキュメントに対する提案や誤りの指摘は
@@ -1206,10 +1207,10 @@ controller# openstack endpoint create --region RegionOne \
 
 ### 5-4 パッケージのインストール
 
-apt-getコマンドでglanceとglanceクライアントパッケージをインストールします。
+apt-getコマンドでglanceとglanceクライアントパッケージをインストールします。Glance APIがSwiftクライアントを要求するのでインストールします。
 
 ```
-controller# apt-get install -y glance python-glanceclient
+controller# apt-get install -y glance python-glanceclient python-swiftclient
 ```
 
 
