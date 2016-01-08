@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.3
+Version:1.0.4
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.3 (2016/01/02作成)<br>
+バージョン：1.0.4 (2016/01/08作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -26,6 +26,7 @@ Version:1.0.3
 |1.0.1|2015/11/27|MariaDBをコントローラーノードに移動したことによる要変更箇所を修正。一部設定変更箇所についての表記を修正|
 |1.0.2|2015/12/04|依存エラーを解決するための対応|
 |1.0.3|2016/01/02|1.0.1の修正に修正漏れがあったため、誤記を修正(Thanks 1484)|
+|1.0.4|2016/01/08|ネットワークトラブル対応用としてcore-network-daemonについて触れた|
 
 ````
 筆者注:このドキュメントに対する提案や誤りの指摘は
@@ -2538,6 +2539,33 @@ controller(admin)# neutron router-port-list demo-router -c fixed_ips --max-width
 ```
 
 ※応答が返ってくれば問題ありません。
+
+このドキュメントの構成ではcore-network-daemonというパッケージをコントローラーノードにインストールすると、従来のOpen vSwitchのようにlinuxbridgeの中をのぞくことができ、仮想ルーターと仮想DHCPサーバーの状態を確認できます。接続がうまくいかない場合におためしください。
+
+```
+controller# ip netns
+qdhcp-5b6a8b87-fd03-46b5-a968-72bac5091b7c
+qrouter-006df4cc-6fb2-40e7-af58-dc68b6755165
+(仮想ルーターと仮想DHCPサーバーを確認)
+...
+controller# ip netns exec `ip netns|grep qrouter*` bash
+(qrouterにログイン)
+...
+controller# ip -f inet addr
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+2: qr-7337070d-45: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    inet 192.168.0.1/24 brd 192.168.0.255 scope global qr-7337070d-45
+       valid_lft forever preferred_lft forever
+3: qg-9477c16b-e5: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
+    inet 172.17.14.240/24 brd 172.17.14.255 scope global qg-9477c16b-e5
+       valid_lft forever preferred_lft forever
+(ネットワークデバイスとIPアドレスを表示)
+...
+controller# ping 8.8.8.8 -I qg-9477c16b-e5
+(Public側から外にアクセスできることを確認) 
+```
 
 
 ### 10-5 インスタンスの起動を確認
