@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.4
+Version:1.0.5
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.4 (2016/01/08作成)<br>
+バージョン：1.0.5 (2016/01/13作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -27,6 +27,8 @@ Version:1.0.4
 |1.0.2|2015/12/04|依存エラーを解決するための対応|
 |1.0.3|2016/01/02|1.0.1の修正に修正漏れがあったため、誤記を修正(Thanks 1484)|
 |1.0.4|2016/01/08|ネットワークトラブル対応用としてcore-network-daemonについて触れた|
+|1.0.5|2016/01/13|Zabbixとhatoholの手順を追加|
+
 
 ````
 筆者注:このドキュメントに対する提案や誤りの指摘は
@@ -3061,7 +3063,496 @@ client$ ssh -i mykey.pem cloud-user@instance-floating-ip
 
 #Part.2 監視環境 構築編
 <br>
-準備中。。
+構築したOpenStack環境をZabbixとHatoholで監視しましょう。
+
+ZabbixはZabbix SIA社が開発・提供・サポートする、オープンソースの監視ソリューションです。
+HatoholはProject Hatoholが開発・提供する、システム監視やジョブ管理やインシデント管理、ログ管理など、様々な運用管理ツールのハブとなるツールです。HatoholはZabbixやNagios、OpenStack Ceilometerに対応しており、これらのツールから情報を収集して性能情報、障害情報、ログなどを一括管理することができます。Hatoholのエンタープライズサポートはミラクル・リナックス株式会社が提供しています。
+
+本編ではOpenStack環境を監視するためにZabbixとHatoholを構築するまでの流れを説明します。
 
 <!-- BREAK -->
 
+## 13. Zabbixのインストール
+
+ZabbixはZabbix SIA社が提供するパッケージを使う方法とCanonical Ubuntuが提供するパッケージを使う方法がありますが、今回は新たなリポジトリー追加が不要なUbuntuが提供する標準パッケージを使って、Zabbixが動作する環境を作っていきましょう。
+
+なお、UbuntuのZabbix関連のパッケージはuniverseリポジトリーで管理されています。universeリポジトリーを参照するように/etc/apt/sources.listを設定する必要があります。
+次のように実行して同じような結果が出力されれば、universeリポジトリーが参照できるように設定されていると判断できます。
+
+```
+# apt-cache policy zabbix-server-mysql
+zabbix-server-mysql:
+  Installed: (none)
+  Candidate: 1:2.2.2+dfsg-1ubuntu1
+  Version table:
+     1:2.2.2+dfsg-1ubuntu1 0
+        500 http://us.archive.ubuntu.com/ubuntu/ trusty/universe amd64 Packages
+```
+
+本例ではZabbixをUbuntu Server 14.04.3上にオールインワン構成でセットアップする手順を示します。
+
+### 13-1 パッケージのインストール
+次のコマンドを実行し、ZabbixおよびZabbixの稼働に必要となるパッケージ群をインストールします。
+
+```
+zabbix# apt-get install -y php5-mysql zabbix-agent zabbix-server-mysql \
+ zabbix-java-gateway zabbix-frontend-php
+```
+
+### 13-2 Zabbix用データベースの作成
+
+#### 13-2-1 データベースの作成
+
+次のコマンドを実行し、Zabbix用MySQLユーザおよびデータベースを作成します。
+
+```
+zabbix# mysql -u root -p << EOF
+CREATE DATABASE zabbix CHARACTER SET UTF8;
+GRANT ALL PRIVILEGES ON zabbix.* TO 'zabbix'@'localhost' \
+  IDENTIFIED BY 'zabbix';
+EOF
+Enter password: ← MySQLのrootパスワードを入力(16-1で設定したもの)
+```
+
+次のコマンドを実行し、Zabbix用データベースにテーブル等のデータベースオブジェクトを作成します。
+
+```
+zabbix# cd /usr/share/zabbix-server-mysql/
+zabbix# zcat schema.sql.gz | mysql zabbix -uzabbix -pzabbix
+zabbix# zcat images.sql.gz | mysql zabbix -uzabbix -pzabbix
+zabbix# zcat data.sql.gz | mysql zabbix -uzabbix -pzabbix
+```
+
+#### 13-2-2 データベースの確認
+
+作成したデータベーステーブルにアクセスしてみましょう。zabbixデータベースに様々なテーブルがあり、参照できれば問題ありません。
+
+```
+zabbix# mysql -u root -p
+Enter password:         ← パスワードzabbixを入力
+mysql> show databases;
++--------------------+
+| Database           |
++--------------------+
+| information_schema |
+| zabbix             |
++--------------------+
+2 rows in set (0.00 sec)
+mysql> use zabbix;
+mysql> show tables;
++-----------------------+
+| Tables_in_zabbix      |
++-----------------------+
+| acknowledges          |
+| actions               |
+| alerts                |
+...
+
+mysql> describe acknowledges;
++---------------+---------------------+------+-----+---------+-------+
+| Field         | Type                | Null | Key | Default | Extra |
++---------------+---------------------+------+-----+---------+-------+
+| acknowledgeid | bigint(20) unsigned | NO   | PRI | NULL    |       |
+| userid        | bigint(20) unsigned | NO   | MUL | NULL    |       |
+| eventid       | bigint(20) unsigned | NO   | MUL | NULL    |       |
+| clock         | int(11)             | NO   | MUL | 0       |       |
+| message       | varchar(255)        | NO   |     |         |       |
++---------------+---------------------+------+-----+---------+-------+
+5 rows in set (0.01 sec)
+```
+
+<!-- BREAK -->
+
+### 13-3 Zabbixサーバーの設定および起動
+/etc/zabbix/zabbix_server.confを編集し、次の行を追加します。なお、MySQLユーザzabbixのパスワードを別の文字列に変更した場合は、該当文字列を指定する必要があります。
+
+```
+zabbix# vi /etc/zabbix/zabbix_server.conf
+...
+DBPassword=zabbix
+```
+
+/etc/default/zabbix-serverを編集し、起動可能にします。
+
+```
+zabbix# vi /etc/default/zabbix-server
+...
+# Instructions on how to set up the database can be found in
+# /usr/share/doc/zabbix-server-mysql/README.Debian
+START=yes                     ← noからyesに変更
+```
+
+以上の操作を行ったのち、サービスzabbix-serverを起動します。
+
+```
+zabbix# service zabbix-server restart
+```
+
+<!-- BREAK -->
+
+### 13-4 Zabbix frontendの設定および起動
+PHPの設定をZabbixが動作するように修正するため、/etc/php5/apache2/php.iniを編集します。
+ 
+ ```
+ zabbix# vi /etc/php5/apache2/php.ini
+
+ [PHP]
+ ...
+ post_max_size = 16M          ← 変更
+ max_execution_time = 300     ← 変更
+ max_input_time = 300         ← 変更
+ 
+ [Date]
+ date.timezone = Asia/Tokyo   ← 変更
+ ```
+
+Zabbix frontendへアクセスできるよう、設定ファイルをコピーします。
+
+```
+zabbix# cp -p /usr/share/doc/zabbix-frontend-php/examples/apache.conf /etc/apache2/conf-enabled/zabbix.conf
+```
+
+これまでの設定変更を反映させるため、サービスApache2をリロードします。
+
+```
+zabbix# service apache2 reload
+```
+
+次に、Zabbix frontendの接続設定を行います。次のコマンドを実行し、一時的に権限を変更します。
+
+```
+zabbix# chmod 775 /etc/zabbix
+zabbix# chgrp www-data /etc/zabbix
+```
+
+WebブラウザでZabbix frontendへアクセスします。画面指示に従い、Zabbixの初期設定を行います。
+
+```
+http://<Zabbix frontendのIPアドレス>/zabbix/
+```
+
+次のような画面が表示されます。「Next」ボタンをクリックして次に進みます。
+
+![Zabbix初期セットアップ](./images/zabbix-setup.png)
+
+- 「2. Check of pre-requisites」は、システム要件を満たしている（全てOKとなっている）ことを確認します。
+- 「3. Configure DB connection」は次のように入力し、「Test connection」ボタンを押してOKとなることを確認します。
+
+項目          | 設定値
+------------- | -------------------------------
+Database type | MySQL
+Database host | localhost
+Database Port | 0
+Database name | zabbix
+User          | zabbix
+Password      | zabbix
+
+- 「4. Zabbix server details」はZabbix Serverのインストール場所の指定です。本例ではそのまま次に進みます。
+- 「5. Pre-Installation summary」で設定を確認し、問題なければ次に進みます。
+- 「6. Install」で設定ファイルのパスが表示されるので確認し「Finish」ボタンをクリックします（/etc/zabbix/zabbix.conf.php）。
+- ログイン画面が表示されるので、Admin/zabbix（初期パスワード）でログインします。
+
+Zabbixの初期セットアップ終了後にログイン画面が表示されますので、実際に運用開始する前に次のコマンドを実行して権限を元に戻します。
+
+```
+zabbix# chmod 755 /etc/zabbix
+zabbix# chgrp root /etc/zabbix
+```
+
+<!-- BREAK -->
+
+## 14. Hatoholのインストール
+
+HatoholはCentOS6.5以降、Ubuntu Server 12.04および14.04などで動作します。
+本例ではHatoholをCentOS 7上にオールインワン構成でセットアップする手順を示します。
+
+![Hatoholダッシュボード](./images/hatohol2.png)
+
+### 14-1 インストール
+
+　1. Hatoholをインストールするために、Project Hatohol公式のYUMリポジトリーを登録します。
+
+```
+hatohol# wget -P /etc/yum.repos.d/ http://project-hatohol.github.io/repo/hatohol-el7.repo
+```
+
+　2. EPELリポジトリー上のパッケージのインストールをサポートするため、EPELパッケージを追加インストールします。
+
+```
+hatohol# yum install -y epel-release
+hatohol# yum update
+```
+
+　3. Hatoholサーバをインストールします。
+
+```
+hatohol# yum -y install hatohol-server
+```
+
+　4. Hatohol Web Frontendをインストールします。
+
+```
+hatohol# yum install -y hatohol-web
+```
+
+　5. 必要となる追加パッケージをインストールします。
+
+```
+hatohol# yum install -y mariadb-server qpid-cpp-server
+```
+
+
+### 14-2 セットアップ
+
+まず、hatoholにインストールしたローカルのMariaDBサーバー関連の設定を行います。
+
+1. MariaDBサーバーの起動
+
+```
+hatohol# systemctl enable mariadb
+hatohol# systemctl start mariadb
+```
+
+2. rootユーザーのパスワードを設定
+
+インストール直後はrootユーザーのパスワードは設定されないため、次のコマンドを使ってrootパスワードの設定を行います。この後の設定は適宜実施します。
+
+```
+hatohol# mysql_secure_installation
+...
+Enter current password for root (enter for none): ←Enterキーを押す
+Change the root password? [Y/n]  y
+```
+
+3. Hatohol DBの初期化
+
+```
+hatohol# hatohol-db-initiator --db_user <MariaDBのrootユーザー名> --db_password <MariaDBのrootパスワード>
+```
+
+そのまま上記コマンドを実行した場合、MySQLユーザhatohol、データベースhatoholが作成されます。これらを変更する場合、事前に/etc/hatohol/hatohol.confを編集してください。
+
+4. Hatohol Web用DBの作成
+
+```
+hatohol# mysql -u root -p
+MariaDB> CREATE DATABASE hatohol_client;
+MariaDB> GRANT ALL PRIVILEGES ON hatohol_client.* TO hatohol@localhost IDENTIFIED BY 'hatohol';
+```
+
+5. Hatohol Web用DBへのテーブル追加
+
+```
+# /usr/libexec/hatohol/client/manage.py syncdb
+```
+
+6. Hatoholサーバーの自動起動の有効化と起動
+
+```
+hatohol# systemctl enable hatohol
+hatohol# systemctl start hatohol
+```
+
+7. Hatohol Webの自動起動の有効化と起動
+
+```
+hatohol# systemctl enable httpd
+hatohol# systemctl start httpd
+```
+
+### 14-3 セキュリティ設定の変更
+
+CentOSインストール後の初期状態では、SElinux, Firewalld, iptablesといったセキュリティ機構により他のコンピュータからのアクセスに制限が加えられます。Hatoholを使用するにあたり、これらを適切に解除する必要があります。
+
+　1. SELinuxの設定  
+
+```
+hatohol# getenforce
+Enforcing
+```
+
+Enforcingの場合、次のコマンドでSElinuxポリシールールの強制適用を解除できます。
+
+```
+hatohol# setenforce 0
+hatohol# getenforce
+Permissive
+```
+
+恒久的にSELinuxポリシールールの適用を無効化するには、/etc/selinux/configを編集します。
+
+ * 編集前
+
+ ```
+ SELINUX=enforcing
+ ```
+
+ * 編集後
+
+ ```
+ SELINUX=permissive
+ ```
+ 
+ 完全にSELinuxを無効化するには、次のように設定します。
+
+ ```
+ SELINUX=disabled
+ ```
+ 
+ 
+ ```
+ 筆者注:
+ SELinuxはできる限り無効化すべきではありません。
+ ```
+
+　2. パケットフィルタリングの設定
+フィルタリングの設定変更は、次のコマンドで恒久的に変更可能です。
+
+```
+hatohol# firewall-cmd --zone=public --add-port=80/tcp --permanent
+hatohol# firewall-cmd --zone=public --add-port=80/tcp
+```
+
+<!-- BREAK -->
+
+### 14-4 Hatoholによる情報の閲覧
+
+Hatohol Webが動作しているホストのトップディレクトリーをWebブラウザで表示してください。10.0.0.10で動作している場合は、次のURLとなります。admin/hatohol（初期パスワード）でログインできます。
+
+```
+http://10.0.0.10/
+```
+
+Hatoholは監視サーバーから取得したログ、イベント、性能情報を表示するだけでなく、それらの情報を統計してグラフとして出力することができる機能が備わっています。CPUのシステム時間、ユーザー時間をグラフとして出力すると次のようになります。
+
+![Hatoholのグラフ機能](./images/hatohol3.png)
+
+<!-- BREAK -->
+
+### 14-5 HatoholにZabbixサーバーを登録
+
+Hatoholをインストールできたら、Zabbixサーバーの情報を追加します。Hatohol Webにログインしたら、上部のメニューバーの「設定→監視サーバー」をクリックします。「監視サーバー」の画面に切り替わったら「監視サーバー追加」ボタンをクリックしてノードを登録します。
+
+項目               | 設定値
+------------------ | -------------------------------
+監視サーバータイプ | Zabbix
+ニックネーム       | zabbix1
+ホスト名           | zabbix
+IPアドレス         | (ZabbixサーバーのIPアドレス)
+ポート番号         | 80
+ユーザー           | Admin
+パスワード         | zabbix
+
+ページを再読み込みして、通信状態が「初期状態」から「正常」になる事を確認します。
+
+![Zabbixサーバーの追加](./images/hatohol1.png)
+
+<!-- BREAK -->
+
+### 14-6 HatoholでZabbixサーバーの監視
+
+インストール直後のZabbixサーバーはモニタリング設定が無効化されています。これを有効化するとZabbixサーバー自身の監視データを取得する事ができるようになり、Hatoholで閲覧できるようになります。
+
+Zabbixサーバーのモニタリング設定を変更するには、次の手順で行います。
+
++ Zabbixのメインメニュー「Configuration → Host groups」をクリックします。
++ Host groups一覧から「Zabbix server」をクリックします。
++ 「Zabbix server」のHostの設定で、Statusを「Monitored」に変更します。
++ 「Save」ボタンをクリックして設定変更を適用します。
+
+以上の手順で、Zabbixサーバーを監視対象として設定できます。
+
+### 14-7 Hatoholでその他のホストの監視
+
+ZabbixとHatoholの連携ができたので、あとは対象のサーバーにZabbix Agentをインストールし、手動でZabbixサーバーにホストを追加するか、ディスカバリ自動登録を使って、特定のネットワークセグメントに所属するZabbix Agentがインストールされたホストを自動登録するようにセットアップするなどの方法で監視ノードを追加できます。
+追加したノードはZabbixおよびHatoholで監視する事ができます。
+
+#### 14-7-1 Zabbix Agentのインストール
+
+ZabbixでOpenStackのcontrollerノード、networkノード、computeノードを監視するためにZabbix Agentをインストールします。Ubuntuには標準でZabbix Agentパッケージが用意されているので、apt-getコマンドなどを使ってインストールします。
+
+```
+# apt-get update && apt-get install -y zabbix-agent
+```
+
+#### 14-7-2 Zabbix Agentの設定
+
+Zabbix Agentをインストールしたら次にどのZabbixサーバーと通信するのか設定を行う必要があります。最低限必要な設定は次の3つです。次のように設定します。
+
+(controllerノードの設定記述例)
+
+```
+# vi /etc/zabbix/zabbix_agentd.conf
+...
+Server          10.0.0.10     ← ZabbixサーバーのIPアドレスに書き換え
+ServerActive    10.0.0.10     ← ZabbixサーバーのIPアドレスに書き換え
+Hostname  controller      ← Zabbixサーバーに登録する際のホスト名と同一のものを設定
+ListenIP  10.0.0.101      ← Zabbixエージェントが待ち受ける側のIPアドレス
+```
+
+ListenIPに指定するのはZabbixサーバーと通信できるNICに設定したIPアドレスを設定します。
+
+<!-- BREAK -->
+
+変更したZabbix Agentの設定を反映させるため、Zabbix Agentサービスを再起動します。
+
+```
+# service zabbix-agent restart
+```
+
+#### 14-7-3 ホストの登録
+
+Zabbix Agentのセットアップが終わったら、次にZabbix AgentをセットアップしたサーバーをZabbixの管理対象として追加します。次のように設定します。
+
+- ZabbixのWeb管理コンソールにアクセスします。
+- 「Configuration → Host」をクリックします。初期設定時はZabbix serverのみが登録されていると思います。同じように監視対象のサーバーをZabbixに登録します。
+
+- 「Hosts」画面の右上にある、「Create Host」ボタンをクリックします。
+- 次のように設定します。
+
+「Host」の設定    | 説明
+----------------- | ----------------
+Host name         | zabbix_agentd.confにそれぞれ記述したHostnameを記述
+Visible name      | 表示名（オプション）
+Groups            | 所属グループの指定。例としてLinux serversを指定
+Agent interfaces  | 監視対象とするAgentがインストールされたホストのIPアドレス（もしくはホスト名）
+Status            | Monitored
+
+その他の項目は適宜設定します。
+
+- 「CONFIGURATION OF HOSTS」の「Templates」タブをクリックして設定を切り替えます。
+- 「Link new templates」の検索ボックスに「Template OS Linux」と入力し、選択肢が出てきたらクリックします。そのほかのテンプレートを割り当てるにはテンプレートを検索し、該当のものを選択します。
+- 「Link new templates」にテンプレートを追加したら、その項目の「Add」リンクをクリックします。「Linked templates」に追加されます。
+- 「Save」ボタンをクリックします。
+- 「Hosts」画面にサーバーが追加されます。ページの再読み込みを実行して、Zabbixエージェントが有効になっていることを確認してください。「Z」アイコンが緑色になればOKです。
+
+![Zabbixエージェントステータスを確認](./images/zabbix-agent.png)
+
+- ほかに追加したいサーバーがあれば「Zabbix Agentのインストール、設定、ホストの登録」の一連の流れを繰り返します。監視したい対象が大量にある場合はオートディスカバリを検討してください。
+
+<!-- BREAK -->
+
+#### 14-7-4 Hatoholで確認
+
+登録したサーバーの情報がHatoholで閲覧できるか確認してみましょう。Zabbixサーバー以外のログなど表示できるようになればOKです。
+
+![OpenStackノードの監視](./images/hatohol-view.png)
+
+
+#### 14-7-5 参考情報
+
+ホストの追加やディスカバリ自動登録については次のドキュメントをご覧ください。
+
+- <https://www.zabbix.com/documentation/2.2/jp/manual/quickstart/host>
+- <https://www.zabbix.com/documentation/2.2/jp/manual/discovery/auto_registration>
+- <http://www.zabbix.com/jp/auto_discovery.php>
+- <https://www.zabbix.com/documentation/2.2/jp/manual/discovery/network_discovery/rule>
+
+<!-- BREAK -->
+
+### 14-8 Hatohol Arm Plugin Interfaceを使用する場合の操作
+Hatohol Arm Plugin Interface(HAPI)を使用する場合、/etc/qpid/qpidd.confに次の行を追記します。なお、=の前後にスペースを入れてはなりません。
+
+```
+auth=no
+```
