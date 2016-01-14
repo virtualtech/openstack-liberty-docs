@@ -289,7 +289,7 @@ iface eth0 inet static
 #### 2-1-2 コンピュートノードのIPアドレスの設定
 
 ```
-compute1# vi /etc/network/interfaces
+compute# vi /etc/network/interfaces
 
 auto eth0
 iface eth0 inet static
@@ -331,7 +331,7 @@ controller
 すべてのノードで127.0.1.1の行をコメントアウトします。
 またホスト名で名前引きできるように設定します。
 
-（例）controllerの場合
+（例）コントローラーノードの場合
 
 ```
 # vi /etc/hosts
@@ -419,7 +419,7 @@ server controller iburst
 設定を適用するため、NTPサービスを再起動します。
 
 ```
-network# service chrony restart
+compute# service chrony restart
 ```
 
 #### 2-5-4 NTPサーバーの動作確認
@@ -457,7 +457,7 @@ MS Name/IP address         Stratum Poll Reach LastRx Last sample
 コントローラーノードでPython用のMySQL/MariaDBクライアントをインストールします。
 
 ```
-# apt-get install -y python-pymysql
+controller# apt-get install -y python-pymysql
 ```
 
 <!-- BREAK -->
@@ -518,7 +518,7 @@ controller# service mysql restart
 コンピュートノードに、インストール済みのMariaDBと同様のバージョンのMariaDBクライアントをインストールします。
 
 ````
-# apt-get install -y mariadb-client-5.5 mariadb-client-core-5.5
+compute# apt-get install -y mariadb-client-5.5 mariadb-client-core-5.5
 ````
 
 <!-- BREAK -->
