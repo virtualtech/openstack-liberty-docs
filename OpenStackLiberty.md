@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.5
+Version:1.0.6
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.5 (2016/01/13作成)<br>
+バージョン：1.0.6 (2016/01/14作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -28,6 +28,7 @@ Version:1.0.5
 |1.0.3|2016/01/02|1.0.1の修正に修正漏れがあったため、誤記を修正(Thanks 1484)|
 |1.0.4|2016/01/08|ネットワークトラブル対応用としてcore-network-daemonについて触れた|
 |1.0.5|2016/01/13|Zabbixとhatoholの手順を追加|
+|1.0.6|2016/01/14|改行、改ページの調整及び書式崩れの対応|
 
 
 ````
@@ -897,6 +898,7 @@ Repeat User Password: password
 ```
 
 + adminロールの作成
+
 ```
 controller# openstack role create admin
 +-------+----------------------------------+
@@ -908,6 +910,7 @@ controller# openstack role create admin
 ```
 
 + adminプロジェクトとユーザーにadminロールを追加します。
+
 ```
 controller# openstack role add --project admin --user admin admin
 ```
@@ -915,6 +918,7 @@ controller# openstack role add --project admin --user admin admin
 <!-- BREAK -->
 
 + serviceプロジェクトを作成
+
 ```
 controller# openstack project create --domain default \
  --description "Service Project" service
@@ -932,6 +936,7 @@ controller# openstack project create --domain default \
 ```
 
 + demoプロジェクトの作成
+
 ```
 controller# openstack project create --domain default \
  --description "Demo Project" demo
@@ -949,6 +954,7 @@ controller# openstack project create --domain default \
 ```
 
 + demoユーザーの作成
+
 ```
 controller# openstack user create --domain default \
  --password-prompt demo
@@ -967,6 +973,7 @@ Repeat User Password: password
 <!-- BREAK -->
 
 + userロールの作成
+
 ```
 controller# openstack role create user
 +-------+----------------------------------+
@@ -978,6 +985,7 @@ controller# openstack role create user
 ```
 
 + demoプロジェクトとdemoユーザーにuserロールを追加します。
+
 ```
 controller# openstack role add --project demo --user demo user
 ```
@@ -3306,14 +3314,14 @@ hatohol# yum install -y mariadb-server qpid-cpp-server
 
 まず、hatoholにインストールしたローカルのMariaDBサーバー関連の設定を行います。
 
-1. MariaDBサーバーの起動
+　1. MariaDBサーバーの起動
 
 ```
 hatohol# systemctl enable mariadb
 hatohol# systemctl start mariadb
 ```
 
-2. rootユーザーのパスワードを設定
+　2. rootユーザーのパスワードを設定
 
 インストール直後はrootユーザーのパスワードは設定されないため、次のコマンドを使ってrootパスワードの設定を行います。この後の設定は適宜実施します。
 
@@ -3324,7 +3332,7 @@ Enter current password for root (enter for none): ←Enterキーを押す
 Change the root password? [Y/n]  y
 ```
 
-3. Hatohol DBの初期化
+　3. Hatohol DBの初期化
 
 ```
 hatohol# hatohol-db-initiator --db_user <MariaDBのrootユーザー名> --db_password <MariaDBのrootパスワード>
@@ -3332,7 +3340,9 @@ hatohol# hatohol-db-initiator --db_user <MariaDBのrootユーザー名> --db_pas
 
 そのまま上記コマンドを実行した場合、MySQLユーザhatohol、データベースhatoholが作成されます。これらを変更する場合、事前に/etc/hatohol/hatohol.confを編集してください。
 
-4. Hatohol Web用DBの作成
+<!-- BREAK -->
+
+　4. Hatohol Web用DBの作成
 
 ```
 hatohol# mysql -u root -p
@@ -3340,20 +3350,20 @@ MariaDB> CREATE DATABASE hatohol_client;
 MariaDB> GRANT ALL PRIVILEGES ON hatohol_client.* TO hatohol@localhost IDENTIFIED BY 'hatohol';
 ```
 
-5. Hatohol Web用DBへのテーブル追加
+　5. Hatohol Web用DBへのテーブル追加
 
 ```
 # /usr/libexec/hatohol/client/manage.py syncdb
 ```
 
-6. Hatoholサーバーの自動起動の有効化と起動
+　6. Hatoholサーバーの自動起動の有効化と起動
 
 ```
 hatohol# systemctl enable hatohol
 hatohol# systemctl start hatohol
 ```
 
-7. Hatohol Webの自動起動の有効化と起動
+　7. Hatohol Webの自動起動の有効化と起動
 
 ```
 hatohol# systemctl enable httpd
@@ -3475,6 +3485,8 @@ ZabbixでOpenStackのcontrollerノード、networkノード、computeノード�
 # apt-get update && apt-get install -y zabbix-agent
 ```
 
+<!-- BREAK -->
+
 #### 14-7-2 Zabbix Agentの設定
 
 Zabbix Agentをインストールしたら次にどのZabbixサーバーと通信するのか設定を行う必要があります。最低限必要な設定は次の3つです。次のように設定します。
@@ -3492,13 +3504,13 @@ ListenIP  10.0.0.101      ← Zabbixエージェントが待ち受ける側のIP
 
 ListenIPに指定するのはZabbixサーバーと通信できるNICに設定したIPアドレスを設定します。
 
-<!-- BREAK -->
-
 変更したZabbix Agentの設定を反映させるため、Zabbix Agentサービスを再起動します。
 
 ```
 # service zabbix-agent restart
 ```
+
+<!-- BREAK -->
 
 #### 14-7-3 ホストの登録
 
@@ -3524,6 +3536,9 @@ Status            | Monitored
 - 「Link new templates」の検索ボックスに「Template OS Linux」と入力し、選択肢が出てきたらクリックします。そのほかのテンプレートを割り当てるにはテンプレートを検索し、該当のものを選択します。
 - 「Link new templates」にテンプレートを追加したら、その項目の「Add」リンクをクリックします。「Linked templates」に追加されます。
 - 「Save」ボタンをクリックします。
+
+<!-- BREAK -->
+
 - 「Hosts」画面にサーバーが追加されます。ページの再読み込みを実行して、Zabbixエージェントが有効になっていることを確認してください。「Z」アイコンが緑色になればOKです。
 
 ![Zabbixエージェントステータスを確認](./images/zabbix-agent.png)
