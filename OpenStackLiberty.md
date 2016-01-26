@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.6
+Version:1.0.6-2
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.6 (2016/01/14作成)<br>
+バージョン：1.0.6-2 (2016/01/27作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -28,7 +28,8 @@ Version:1.0.6
 |1.0.3|2016/01/02|1.0.1の修正に修正漏れがあったため、誤記を修正(Thanks 1484)|
 |1.0.4|2016/01/08|ネットワークトラブル対応用としてcore-network-daemonについて触れた|
 |1.0.5|2016/01/13|Zabbixとhatoholの手順を追加|
-|1.0.6|2016/01/14|改行、改ページの調整及び書式崩れの対応|
+|1.0.6-1|2016/01/14|改行、改ページの調整及び書式崩れの対応|
+|1.0.6-2|2016/01/27|意図しない箇所のホスト名抜けを修正|
 
 
 ````
@@ -321,7 +322,7 @@ iface eth0 inet static
 （例）コントローラーノードの場合
 
 ```
-# hostnamectl set-hostname controller
+controller# hostnamectl set-hostname controller
 # cat /etc/hostname
 controller
 ```
@@ -334,7 +335,7 @@ controller
 （例）コントローラーノードの場合
 
 ```
-# vi /etc/hosts
+controller# vi /etc/hosts
 127.0.0.1 localhost
 #127.0.1.1 controller ← 既存設定をコメントアウト
 #ext
@@ -1694,7 +1695,7 @@ compute# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 まず次のようにコマンドを実行し、KVMが動く環境であることを確認します。CPUがVMXもしくはSVM対応であるか、コア数がいくつかを出力しています。0と表示される場合は後述の設定でvirt_type = qemuを設定します。
 
 ```
-# cat /proc/cpuinfo |egrep 'vmx|svm'|wc -l
+compute# cat /proc/cpuinfo |egrep 'vmx|svm'|wc -l
 4
 ```
 
@@ -2012,7 +2013,7 @@ controller# less /etc/neutron/plugins/ml2/linuxbridge_agent.ini | grep -v "^\s*$
 external_network_bridgeは単一のエージェントで複数の外部ネットワークを有効にするには値を指定してはならないため、値を空白にします。
 
 ```
-# vi /etc/neutron/l3_agent.ini
+controller# vi /etc/neutron/l3_agent.ini
 
 [DEFAULT]  (最終行に以下を追記)
 ...
@@ -2023,7 +2024,7 @@ external_network_bridge =
 + DHCPエージェントの設定
 
 ```
-# vi /etc/neutron/dhcp_agent.ini 
+controller# vi /etc/neutron/dhcp_agent.ini 
 
 [DEFAULT]  (最終行に以下を追記)
 ...
@@ -2039,7 +2040,7 @@ enable_isolated_metadata = True
 + DHCPエージェントにdnsmasqの設定を追記
 
 ```
-# vi /etc/neutron/dhcp_agent.ini 
+controller# vi /etc/neutron/dhcp_agent.ini 
 
 [DEFAULT]
 ...
@@ -2049,7 +2050,7 @@ dnsmasq_config_file = /etc/neutron/dnsmasq-neutron.conf  ← 追記
 + DHCPオプションの26番(MTU)を定義
 
 ```
-# vi /etc/neutron/dnsmasq-neutron.conf
+controller# vi /etc/neutron/dnsmasq-neutron.conf
 
 dhcp-option-force=26,1450
 ```
@@ -2059,7 +2060,7 @@ dhcp-option-force=26,1450
 インスタンスのメタデータサービスを提供するMetadata agentを設定します。
 
 ```
-# vi /etc/neutron/metadata_agent.ini
+controller# vi /etc/neutron/metadata_agent.ini
 
 [DEFAULT]
 #auth_url = http://localhost:5000/v2.0      ← コメントアウト
@@ -2569,7 +2570,7 @@ controller# ip -f inet addr
     inet 192.168.0.1/24 brd 192.168.0.255 scope global qr-7337070d-45
        valid_lft forever preferred_lft forever
 3: qg-9477c16b-e5: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc pfifo_fast state UP group default qlen 1000
-    inet 172.17.14.240/24 brd 172.17.14.255 scope global qg-9477c16b-e5
+    inet 10.0.0.200/24 brd 10.0.0.255 scope global qg-9477c16b-e5
        valid_lft forever preferred_lft forever
 (ネットワークデバイスとIPアドレスを表示)
 ...
@@ -2593,7 +2594,7 @@ controller(demo)# openstack image list
 | debb1779-fb3c-42a7-aa18-4f6d0c9446f7 | cirros-0.3.4-x86_64 |
 +--------------------------------------+---------------------+
 
-controller# openstack network list -c ID -c Name
+controller(demo)# openstack network list -c ID -c Name
 (ネットワーク一覧を表示)
 +--------------------------------------+----------+
 | ID                                   | Name     |
@@ -2602,7 +2603,7 @@ controller# openstack network list -c ID -c Name
 | 5b6a8b87-fd03-46b5-a968-72bac5091b7c | demo-net |
 +--------------------------------------+----------+
 
-controller# openstack security group list -c ID -c Name
+controller(demo)# openstack security group list -c ID -c Name
 (セキュリティグループ一覧を表示)
 +--------------------------------------+---------+
 | ID                                   | Name    |
@@ -2610,7 +2611,7 @@ controller# openstack security group list -c ID -c Name
 | 978dc272-58b0-4a7d-b232-30771e9fa7c2 | default |
 +--------------------------------------+---------+
 
-controller# openstack flavor list -c Name -c Disk
+controller(demo)# openstack flavor list -c Name -c Disk
 (フレーバー一覧を表示)
 +-----------+------+
 | Name      | Disk |
@@ -2626,10 +2627,10 @@ controller# openstack flavor list -c Name -c Disk
 nova bootコマンドを使って、インスタンスを起動します。正常に起動したらnova deleteコマンドでインスタンスを削除してください。
 
 ```
-controller# nova boot --flavor m1.tiny --image "cirros-0.3.4-x86_64" --nic net-id=5b6a8b87-fd03-46b5-a968-72bac5091b7c --security-group 978dc272-58b0-4a7d-b232-30771e9fa7c2 vm1
+controller(demo)# nova boot --flavor m1.tiny --image "cirros-0.3.4-x86_64" --nic net-id=5b6a8b87-fd03-46b5-a968-72bac5091b7c --security-group 978dc272-58b0-4a7d-b232-30771e9fa7c2 vm1
 (インスタンスを起動)
 
-controller# watch nova list
+controller(demo)# watch nova list
 (インスタンス一覧を表示)
 +--------------------------------------+------+--------+------------+-------------+----------------------+
 | ID                                   | Name | Status | Task State | Power State | Networks             |
@@ -2642,7 +2643,7 @@ controller# watch nova list
 # grep "ERROR\|WARNING" /var/log/nova/*
 (各ノードの関連サービスでエラーが出ていないことを確認)
 
-controller# nova delete vm1
+controller(demo)# nova delete vm1
 Request to delete server vm1 has been accepted.
 (起動したインスタンスを削除)
 ```
