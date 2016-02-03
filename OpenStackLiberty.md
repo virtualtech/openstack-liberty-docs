@@ -1539,9 +1539,11 @@ linuxnet_interface_driver = nova.network.linux_net.NeutronLinuxBridgeInterfaceDr
 firewall_driver = nova.virt.firewall.NoopFirewallDriver
 enabled_apis=osapi_compute,metadata
 
+
 [vnc]
 vncserver_listen = 10.0.0.101               ←追記
-vncserver_proxyclient_address = 10.0.0.101  ←追記
+vncserver_proxyclient_address = 10.0.0.101  ←自ホストを指定
+novncproxy_base_url = http://10.0.0.101:6080/vnc_auto.html  ←novncホストを指定
 
 （次ページに続きます...）
 ```
@@ -1560,7 +1562,7 @@ rabbit_userid = openstack
 rabbit_password = password
 
 [keystone_authtoken]
-auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = novapassword = password     ← novaユーザーのパスワード(6-2で設定したもの)
+auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = novapassword = password     ←novaユーザーのパスワード(6-2で設定したもの)
 
 [glance]
 host = controller
@@ -1642,7 +1644,7 @@ dhcpbridge_flagfile=/etc/nova/nova.conf
 dhcpbridge=/usr/bin/nova-dhcpbridge
 logdir=/var/log/nova
 state_path=/var/lib/nova
-#lock_path=/var/lock/nova       ← コメントアウト
+#lock_path=/var/lock/nova       ←コメントアウト
 force_dhcp_release=True
 libvirt_use_virtio_for_bridges=True
 verbose=True
@@ -1652,7 +1654,7 @@ enabled_apis=ec2,osapi_compute,metadata
 rpc_backend = rabbit
 auth_strategy = keystone
 
-my_ip = 10.0.0.102  ← IPアドレスで指定
+my_ip = 10.0.0.102  ←IPアドレスで指定
 
 network_api_class = nova.network.neutronv2.api.API
 security_group_api = neutron
@@ -1668,9 +1670,9 @@ firewall_driver = nova.virt.firewall.NoopFirewallDriver
 [vnc]
 enabled = True
 vncserver_listen = 0.0.0.0
-vncserver_proxyclient_address = 10.0.0.102  ← IPアドレスで指定
-novncproxy_base_url = http://controller:6080/vnc_auto.html
-vnc_keymap = ja                             ← 日本語キーボードの設定
+vncserver_proxyclient_address = 10.0.0.102  ←自ホストを指定
+novncproxy_base_url = http://10.0.0.101:6080/vnc_auto.html ←novncホストを指定
+vnc_keymap = ja                             ←日本語キーボードの設定
 
 [oslo_messaging_rabbit]
 rabbit_host = controller
@@ -1678,7 +1680,7 @@ rabbit_userid = openstack
 rabbit_password = password
 
 [keystone_authtoken]
-auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = novapassword = password     ← novaユーザーのパスワード(6-2で設定したもの)
+auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = novapassword = password     ←novaユーザーのパスワード(6-2で設定したもの)
 
 [glance]
 host = controller
@@ -1737,7 +1739,7 @@ controller# openstack compute service list -c Binary -c Host -c State
 +------------------+----------------+-------+
 | nova-cert        | controller     | up    |
 | nova-consoleauth | controller     | up    |
-| nova-scheduler   | controller     | up    | ← Novaのステータスを確認
+| nova-scheduler   | controller     | up    | ←Novaのステータスを確認
 | nova-conductor   | controller     | up    |
 | nova-compute     | compute        | up    |
 +------------------+----------------+-------+
@@ -1777,7 +1779,7 @@ GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'localhost' \
 GRANT ALL PRIVILEGES ON neutron.* TO 'neutron'@'%' \
   IDENTIFIED BY 'password';
 EOF
-Enter password: ← MariaDBのrootパスワードpasswordを入力
+Enter password: ←MariaDBのrootパスワードpasswordを入力
 ```
 
 ### 8-2 データベースの確認
@@ -1786,7 +1788,7 @@ MariaDBにNeutronのデータベースが登録されたか確認します。
 
 ```
 controller# mysql -u neutron -p
-Enter password: ← MariaDBのneutronパスワードpasswordを入力
+Enter password: ←MariaDBのneutronパスワードpasswordを入力
 ...
 
 Type 'help;' or '\h' for help. Type '\c' to clear the current input statement.
@@ -1887,14 +1889,14 @@ controller# apt-get install neutron-server neutron-plugin-ml2 \
 controller# vi /etc/neutron/neutron.conf 
 
 [DEFAULT]...
-core_plugin = ml2             ← 確認service_plugins = router      ← 追記allow_overlapping_ips = True  ← 追記
-rpc_backend = rabbit          ← コメントをはずす
-auth_strategy = keystone      ← コメントをはずす
-notify_nova_on_port_status_changes = True   ← コメントをはずすnotify_nova_on_port_data_changes = True     ← コメントをはずすnova_url = http://controller:8774/v2        ← 追記
+core_plugin = ml2             ←確認service_plugins = router      ←追記allow_overlapping_ips = True  ←追記
+rpc_backend = rabbit          ←コメントをはずす
+auth_strategy = keystone      ←コメントをはずす
+notify_nova_on_port_status_changes = True   ←コメントをはずすnotify_nova_on_port_data_changes = True     ←コメントをはずすnova_url = http://controller:8774/v2        ←追記
 
 [database]
-#connection = sqlite:////var/lib/neutron/neutron.sqlite  ← 既存設定をコメントアウト
-connection = mysql+pymysql://neutron:password@controller/neutron  ← 追記
+#connection = sqlite:////var/lib/neutron/neutron.sqlite  ←既存設定をコメントアウト
+connection = mysql+pymysql://neutron:password@controller/neutron  ←追記
 
 [keystone_authtoken]（既存の設定はコメントアウトし、以下を追記）
 ...
@@ -1903,7 +1905,7 @@ auth_url = http://controller:35357
 auth_plugin = password
 project_domain_id = default
 user_domain_id = default
-project_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(9-2で設定したもの)
+project_name = serviceusername = neutronpassword = password       ←neutronユーザーのパスワード(9-2で設定したもの)
 
 （次ページに続きます...）
 ```
@@ -1915,11 +1917,11 @@ project_name = serviceusername = neutronpassword = password       ← neutron�
 
 [nova]（以下末尾に追記）
 ...
-auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultregion_name = RegionOneproject_name = serviceusername = novapassword = password     ← novaユーザーのパスワード(6-2で設定したもの)
+auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultregion_name = RegionOneproject_name = serviceusername = novapassword = password     ←novaユーザーのパスワード(6-2で設定したもの)
 
 [oslo_concurrency]
-#lock_path = $state_path/lock     ← コメントアウト 
-lock_path = /var/lib/neutron/tmp  ← 追記
+#lock_path = $state_path/lock     ←コメントアウト 
+lock_path = /var/lib/neutron/tmp  ←追記
 [oslo_messaging_rabbit]（以下追記）...rabbit_host = controller
 rabbit_userid = openstack
 rabbit_password = password
@@ -1942,22 +1944,22 @@ controller# vi /etc/neutron/plugins/ml2/ml2_conf.ini
 
 [ml2]
 ...
-type_drivers = flat,vxlan           ← 追記
-tenant_network_types = vxlan             ← 追記
-mechanism_drivers = linuxbridge,l2population   ← 追記
-extension_drivers = port_security              ← 追記
+type_drivers = flat,vxlan           ←追記
+tenant_network_types = vxlan             ←追記
+mechanism_drivers = linuxbridge,l2population   ←追記
+extension_drivers = port_security              ←追記
 
 [ml2_type_flat]
 ...
-flat_networks = public                   ← 追記
+flat_networks = public                   ←追記
 
 [ml2_type_vxlan]
 ...
-vni_ranges = 1:1000                      ← 追記
+vni_ranges = 1:1000                      ←追記
 
 [securitygroup]
 ...                                                     
-enable_ipset = True                      ← コメントをはずす
+enable_ipset = True                      ←コメントをはずす
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
@@ -1976,16 +1978,16 @@ controller# less /etc/neutron/plugins/ml2/ml2_conf.ini | grep -v "^\s*$" | grep 
 controller# vi /etc/neutron/plugins/ml2/linuxbridge_agent.ini
 
 [linux_bridge]
-physical_interface_mappings = public:eth0 ← 追記
+physical_interface_mappings = public:eth0 ←追記
 ```
 
 local_ipは、先にphysical_interface_mappingに設定したNIC側のIPアドレスを設定します。
 
 ```
 [vxlan]
-enable_vxlan = True                        ← コメントをはずす
-local_ip = 10.0.0.101                      ← 追記
-l2_population = True                       ← 追記
+enable_vxlan = True                        ←コメントをはずす
+local_ip = 10.0.0.101                      ←追記
+l2_population = True                       ←追記
 ```
 
 エージェントとセキュリティグループの設定を行います。
@@ -1993,11 +1995,11 @@ l2_population = True                       ← 追記
 ```
 [agent]
 ...
-prevent_arp_spoofing = True         ← 追記
+prevent_arp_spoofing = True         ←追記
 ...
 [securitygroup]
 ...
-enable_security_group = True        ← コメントをはずす
+enable_security_group = True        ←コメントをはずす
 firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver 
 ↑ 追記
 ```
@@ -2044,7 +2046,7 @@ controller# vi /etc/neutron/dhcp_agent.ini
 
 [DEFAULT]
 ...
-dnsmasq_config_file = /etc/neutron/dnsmasq-neutron.conf  ← 追記
+dnsmasq_config_file = /etc/neutron/dnsmasq-neutron.conf  ←追記
 ```
 
 + DHCPオプションの26番(MTU)を定義
@@ -2063,21 +2065,21 @@ dhcp-option-force=26,1450
 controller# vi /etc/neutron/metadata_agent.ini
 
 [DEFAULT]
-#auth_url = http://localhost:5000/v2.0      ← コメントアウト
+#auth_url = http://localhost:5000/v2.0      ←コメントアウト
 auth_region = RegionOne
-#admin_tenant_name = %SERVICE_TENANT_NAME%  ← コメントアウト
-#admin_user = %SERVICE_USER%                ← コメントアウト
+#admin_tenant_name = %SERVICE_TENANT_NAME%  ←コメントアウト
+#admin_user = %SERVICE_USER%                ←コメントアウト
 #admin_password = %SERVICE_PASSWORD%        ← コメントアウト
 ...
-auth_uri = http://controller:5000           ← これ以下追記
+auth_uri = http://controller:5000           ←これ以下追記
 auth_url = http://controller:35357
 auth_plugin = password
 project_domain_id = default
 user_domain_id = default
 project_name = service
 username = neutron
-password = password     ← neutronユーザーのパスワード(9-2で設定したもの)
-nova_metadata_ip = controller  ← Metadataホストを指定
+password = password     ←neutronユーザーのパスワード(9-2で設定したもの)
+nova_metadata_ip = controller  ←Metadataホストを指定
 metadata_proxy_shared_secret = METADATA_SECRET
 ```
 
@@ -2111,7 +2113,7 @@ user_domain_id = default
 region_name = RegionOne
 project_name = service
 username = neutron
-password = password       ← neutronユーザーのパスワード(9-2で設定したもの)
+password = password       ←neutronユーザーのパスワード(9-2で設定したもの)
 
 service_metadata_proxy = True
 metadata_proxy_shared_secret = METADATA_SECRET
@@ -2198,11 +2200,11 @@ compute# vi /etc/neutron/neutron.conf
 
 [DEFAULT]
 ...
-rpc_backend = rabbit                  ← コメントをはずす
-auth_strategy = keystone              ← コメントをはずす
+rpc_backend = rabbit                  ←コメントをはずす
+auth_strategy = keystone              ←コメントをはずす
 
 [keystone_authtoken]（既存の設定はコメントアウトし、以下を追記）
-...auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = neutronpassword = password       ← neutronユーザーのパスワード(9-2で設定したもの)
+...auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = neutronpassword = password       ←neutronユーザーのパスワード(9-2で設定したもの)
 
 [database]
 # This line MUST be changed to actually run the plugin.
@@ -2212,9 +2214,9 @@ auth_strategy = keystone              ← コメントをはずす
 [oslo_messaging_rabbit]
 ...
 # fake_rabbit = false
-rabbit_host = controller           ← 追記
-rabbit_userid = openstack          ← 追記
-rabbit_password = password         ← 追記
+rabbit_host = controller           ←追記
+rabbit_userid = openstack          ←追記
+rabbit_password = password         ←追記
 ```
 
 <!-- BREAK -->
@@ -2244,13 +2246,13 @@ l2_population = True
 
 [agent]
 ...
-prevent_arp_spoofing = True   ← 追記
+prevent_arp_spoofing = True   ←追記
 
 [securitygroup]
 ...
 enable_security_group = True
 firewall_driver = neutron.agent.linux.iptables_firewall.IptablesFirewallDriver
-↑ 追記
+↑追記
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
@@ -2277,7 +2279,7 @@ user_domain_id = default
 region_name = RegionOne
 project_name = service
 username = neutron
-password = password       ← neutronユーザーのパスワード(9-2で設定したもの)
+password = password       ←neutronユーザーのパスワード(9-2で設定したもの)
 ```
 
 次のコマンドを実行して正しく設定を行ったか確認します。
@@ -2664,7 +2666,7 @@ GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'localhost' \
 GRANT ALL PRIVILEGES ON cinder.* TO 'cinder'@'%' \
   IDENTIFIED BY 'password';
 EOF
-Enter password: ← MariaDBのrootパスワードpasswordを入力
+Enter password: ←MariaDBのrootパスワードpasswordを入力
 ```
 
 #### 11-2 データベースの確認
@@ -2704,7 +2706,7 @@ controller# source admin-openrc.sh
 
 ```
 controller# openstack user create --password-prompt cinder
-User Password: password  #cinderユーザーのパスワードを設定(本書はpasswordを設定)
+User Password: password  ←cinderユーザーのパスワードを設定(本書はpasswordを設定)
 Repeat User Password: password
 +-----------+----------------------------------+
 | Field     | Value                            |
@@ -2791,8 +2793,8 @@ controller# vi /etc/cinder/cinder.conf
 
 [DEFAULT]
 ...
-auth_strategy = keystone      ← 確認
-#lock_path = /var/lock/cinder ← コメントアウト
+auth_strategy = keystone      ←確認
+#lock_path = /var/lock/cinder ←コメントアウト
 
 ↓↓ 以下追記 ↓↓
 
@@ -2809,7 +2811,7 @@ glance_host = controller
 [database]
 connection = mysql+pymysql://cinder:password@controller/cinder
 
-[keystone_authtoken]auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = cinderpassword = password       ← cinderユーザーのパスワード(12-2で設定したもの)
+[keystone_authtoken]auth_uri = http://controller:5000auth_url = http://controller:35357auth_plugin = passwordproject_domain_id = defaultuser_domain_id = defaultproject_name = serviceusername = cinderpassword = password       ←cinderユーザーのパスワード(12-2で設定したもの)
 
 [lvm]volume_driver = cinder.volume.drivers.lvm.LVMVolumeDrivervolume_group = cinder-volumesiscsi_protocol = iscsiiscsi_helper = tgtadm
 ```
@@ -2854,8 +2856,8 @@ controller# rm /var/lib/cinder/cinder.sqlite
 
 ```
 controller# dmesg |grep sd|grep "logical blocks"
-[    1.361779] sd 2:0:0:0: [sda] 62914560 512-byte logical blocks: (32.2 GB/30.0 GiB)  ← システムディスク
-[    1.362105] sd 2:0:1:0: [sdb] 33554432 512-byte logical blocks: (17.1 GB/16.0 GiB)  ← 追加ディスク
+[    1.361779] sd 2:0:0:0: [sda] 62914560 512-byte logical blocks: (32.2 GB/30.0 GiB)  ↑システムディスク
+[    1.362105] sd 2:0:1:0: [sdb] 33554432 512-byte logical blocks: (17.1 GB/16.0 GiB)  ↑追加ディスク
 ```
 
 仮想マシンにハードディスクを増設した場合は/dev/vdbなどのようにデバイス名が異なる場合があります。
@@ -2958,10 +2960,10 @@ controller# apt-get install -y openstack-dashboard
 controller# vi /etc/openstack-dashboard/local_settings.py 
 
 ...
-OPENSTACK_HOST = "controller"    ← 変更
-ALLOWED_HOSTS = '*'              ← 確認
+OPENSTACK_HOST = "controller"    ←変更
+ALLOWED_HOSTS = '*'              ←確認
 
-CACHES = {                       ← 確認'default': {'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache','LOCATION': '127.0.0.1:11211',   }}
+CACHES = {                       ←確認'default': {'BACKEND': 'django.core.cache.backends.memcached.MemcachedCache','LOCATION': '127.0.0.1:11211',   }}
 
 OPENSTACK_KEYSTONE_DEFAULT_ROLE = "user"  ← 変更
 ```
