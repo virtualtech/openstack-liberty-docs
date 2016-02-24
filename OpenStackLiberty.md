@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.6-3
+Version:1.0.6-4
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.6-3 (2016/02/03作成)<br>
+バージョン：1.0.6-4 (2016/02/24作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -31,7 +31,7 @@ Version:1.0.6-3
 |1.0.6-1|2016/01/14|改行、改ページの調整及び書式崩れの対応|
 |1.0.6-2|2016/01/27|意図しない箇所のホスト名抜けを修正|
 |1.0.6-3|2016/02/03|ダッシュボードのcode: 1006エラー対策|
-
+|1.0.6-4|2016/02/24|4-11の動作確認のHTTPコードに誤りがあったので修正(Thanks 1484)|
 
 ````
 筆者注:このドキュメントに対する提案や誤りの指摘は
@@ -1041,12 +1041,12 @@ Password:
 +------------+----------------------------------+
 ```
 
-正常に応答が返ってくると、/var/log/apache2/keystone_access.logにHTTP 200と記録されます。正常に応答がない場合は/var/log/apache2/keystone_error.logを確認しましょう。
+正常に応答が返ってくると、/var/log/apache2/keystone_access.logに「"POST /v3/auth/tokens HTTP/1.1" 201」が記録されます。例えばわざと認証用パスワードを間違えると、「"POST /v3/auth/tokens HTTP/1.1" 401」が記録されます。正常に応答がない場合は/var/log/apache2/keystone_error.logを確認しましょう。
 
 ```
 ...
-10.0.0.101 - - [23/Jun/2015:09:55:21 +0900] "GET / HTTP/1.1" 300 789 "-" "python-keystoneclient"
-10.0.0.101 - - [23/Jun/2015:09:55:24 +0900] "POST /v2.0/tokens HTTP/1.1" 200 1070 "-" "python-keystoneclient"
+10.0.0.101 - - [23/Jun/2015:09:55:21 +0900] "GET /v3 HTTP/1.1" 200 556 "-" "python-openstackclient"
+10.0.0.101 - - [23/Jun/2015:09:55:24 +0900] "POST /v3/auth/tokens HTTP/1.1" 201 3212 "-" "python-openstackclient"
 ```
 
 <!-- BREAK -->
