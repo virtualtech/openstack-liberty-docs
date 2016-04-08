@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.6-4
+Version:1.0.6-5
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.6-4 (2016/02/24作成)<br>
+バージョン：1.0.6-5 (2016/04/08作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -32,6 +32,7 @@ Version:1.0.6-4
 |1.0.6-2|2016/01/27|意図しない箇所のホスト名抜けを修正|
 |1.0.6-3|2016/02/03|ダッシュボードのcode: 1006エラー対策|
 |1.0.6-4|2016/02/24|4-11の動作確認のHTTPコードに誤りがあったので修正(Thanks 1484)|
+|1.0.6-5|2016/04/08|8-7のコマンドに余計なリダイレクトがあったので修正|
 
 ````
 筆者注:このドキュメントに対する提案や誤りの指摘は
@@ -2191,7 +2192,7 @@ controller# less /etc/nova/nova.conf | grep -v "^\s*$" | grep -v "^\s*#"
 
 ```
 controller# su -s /bin/sh -c "neutron-db-manage --config-file /etc/neutron/neutron.conf \
-> --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
+ --config-file /etc/neutron/plugins/ml2/ml2_conf.ini upgrade head" neutron
 
 No handlers could be found for logger "neutron.quota"
 INFO  [alembic.runtime.migration] Context impl MySQLImpl.
