@@ -1,11 +1,11 @@
 Title: OpenStack構築手順書 Liberty版
 Company: 日本仮想化技術
-Version:1.0.6-5
+Version:1.0.6-7
 
 #OpenStack構築手順書 Liberty版
 
 <div class="title">
-バージョン：1.0.6-6 (2016/06/17作成)<br>
+バージョン：1.0.6-7 (2016/06/20作成)<br>
 日本仮想化技術株式会社
 </div>
 
@@ -34,6 +34,7 @@ Version:1.0.6-5
 |1.0.6-4|2016/02/24|4-11の動作確認のHTTPコードに誤りがあったので修正(Thanks 1484)|
 |1.0.6-5|2016/04/08|8-7のコマンドに余計なリダイレクトがあったので修正|
 |1.0.6-6|2016/06/17|軽微な修正|
+|1.0.6-7|2016/06/20|軽微な修正|
 
 
 ````
@@ -517,14 +518,6 @@ character-set-server = utf8                 ← 追記
 controller# service mysql restart
 ```
 
-#### 3-1-4 MariaDBクライアントのインストール
-
-コンピュートノードに、インストール済みのMariaDBと同様のバージョンのMariaDBクライアントをインストールします。
-
-````
-compute# apt-get install -y mariadb-client-5.5 mariadb-client-core-5.5
-````
-
 <!-- BREAK -->
 
 
@@ -839,7 +832,7 @@ controller# rm /var/lib/keystone/keystone.db
 + 環境変数の設定
 
 ```
-controller# export OS_TOKEN=45742a05a541f26ddee8  ← 追記(5-1-3で出力されたキーを入力)
+controller# export OS_TOKEN=45742a05a541f26ddee8  ← 追記(admin_tokenで設定したキーを入力)
 controller# export OS_URL=http://controller:35357/v3
 controller# export OS_IDENTITY_API_VERSION=3
 ```
@@ -1056,7 +1049,11 @@ Password:
 + adminユーザーで管理ユーザー専用のコマンドを使って、作成したプロジェクトを表示できることを確認します。
 
 ```
-controller# openstack --os-auth-url http://controller:35357/v3   --os-project-domain-id default --os-user-domain-id default --os-project-name admin --os-username admin --os-auth-type password project list
+controller# openstack --os-auth-url http://controller:35357/v3 \
+ --os-project-domain-id default \
+ --os-user-domain-id default \
+ --os-project-name admin \
+ --os-username admin --os-auth-type password project list
 Password:
 +----------------------------------+---------+
 | ID                               | Name    |
@@ -1070,7 +1067,11 @@ Password:
 + adminユーザーでユーザーを一覧表示して、先に作成したユーザーが含まれることを確認します。
 
 ```
-controller# openstack --os-auth-url http://controller:35357/v3   --os-project-domain-id default --os-user-domain-id default --os-project-name admin --os-username admin --os-auth-type password user list
+controller# openstack --os-auth-url http://controller:35357/v3 \
+ --os-project-domain-id default  \
+ --os-user-domain-id default  \
+ --os-project-name admin --os-username admin  \
+ --os-auth-type password user list
 Password:
 +----------------------------------+-------+
 | ID                               | Name  |
@@ -1083,7 +1084,11 @@ Password:
 + adminユーザーでユーザーを一覧表示して、先に作成したロールが含まれることを確認します。
 
 ```
-controller# openstack --os-auth-url http://controller:35357/v3   --os-project-domain-id default --os-user-domain-id default --os-project-name admin --os-username admin --os-auth-type password role list
+controller# openstack --os-auth-url http://controller:35357/v3  \
+ --os-project-domain-id default \
+ --os-user-domain-id default \
+ --os-project-name admin \
+ --os-username admin --os-auth-type password role list
 Password:
 +----------------------------------+-------+
 | ID                               | Name  |
